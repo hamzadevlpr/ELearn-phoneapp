@@ -1,45 +1,69 @@
-# [Project name]
+# teachers-eg Mobile App
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+An Arabic/English e-learning mobile app for students (Android, iOS, Web/Windows) connected to the teachers-eg API.
 
 ## Run & Operate
 
+- `pnpm --filter @workspace/mobile run dev` — run the Expo app
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
 - `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Mobile: Expo SDK 54 (React Native), expo-router, expo-video
+- API: Express 5 (internal); External: api.teachers-eg.com
+- Fonts: Cairo (Arabic + English)
+- State: React Query + AsyncStorage + React Context
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/mobile/constants/config.ts` — **App config: APP_NAME, TENANT_ID, API_BASE_URL, APP_LOGO**
+- `artifacts/mobile/lib/api.ts` — API client (all calls to api.teachers-eg.com)
+- `artifacts/mobile/context/AuthContext.tsx` — Auth state (login/logout/token)
+- `artifacts/mobile/context/LanguageContext.tsx` — Language (Arabic/English) + RTL
+- `artifacts/mobile/i18n/ar.ts` + `en.ts` — All UI strings
+- `artifacts/mobile/components/SecuredVideoPlayer.tsx` — Video player with watermark + screen capture protection
+- `artifacts/mobile/components/AccessCodeModal.tsx` — Course access code popup
 
-## Architecture decisions
+## Screens
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+1. `app/login.tsx` — Login (phone + password)
+2. `app/(tabs)/index.tsx` — Teachers list (auto-skips to courses if single teacher)
+3. `app/courses/[teacherId].tsx` — Courses for selected teacher
+4. `app/course/[id].tsx` — Course detail + access code modal
+5. `app/(tabs)/my-courses.tsx` — Purchased/enrolled courses
+6. `app/player/[id].tsx` — Secured video player (watermark + screen capture block)
+7. `app/exam/[id].tsx` — Exam with results
+8. `app/(tabs)/profile.tsx` — Profile, language switch, logout
 
-## Product
+## Multi-tenant / CI-CD
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+To publish a new tenant version, change `constants/config.ts`:
+```ts
+const APP_CONFIG = {
+  APP_NAME: "Your App Name",
+  TENANT_ID: "42",           // ← change per tenant
+  API_BASE_URL: "https://api.teachers-eg.com/api",
+  APP_LOGO: require("..."),  // ← swap logo asset
+};
+```
+
+## Video Security
+
+- Phone number watermark overlay (randomly repositions every 7 seconds)
+- `expo-screen-capture`: blocks screenshots and screen recording on iOS/Android
+- Video served via API URL (no direct MP4 exposure)
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- App supports Arabic (default, RTL) and English (LTR) — user toggles in Profile
+- Dark mode: follows system theme (automatic)
+- No emojis in the UI
 
-## Gotchas
+## Architecture decisions
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- All API calls go directly to `api.teachers-eg.com` — no proxy through internal API server
+- `tenantId` header injected on every request via `lib/api.ts`
+- RTL layout via `I18nManager.forceRTL()` stored in AsyncStorage
+- Access code model (not wallet/payment) for course enrollment
