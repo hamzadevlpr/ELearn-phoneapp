@@ -32,6 +32,7 @@ interface CourseDto {
   thumbnailUrl?: string;
   introVideoUrl?: string;
   codePriceValue?: number;
+  codePriceName?: string;
   totalLessons?: number;
   totaExams?: number;
   mainTeacherName?: string;
@@ -40,6 +41,7 @@ interface CourseDto {
   portalTeacherName?: string;
   studentGradeName?: string;
   materialStudyName?: string;
+  materialStudy?: number;
   courseStatusName?: string;
 }
 
@@ -236,6 +238,7 @@ function mapCourse(dto: CourseDto, isAllowed?: boolean): Course {
     isPurchased: isAllowed,
     grade: dto.studentGradeName,
     subject: dto.materialStudyName,
+    materialStudy: dto.materialStudy,
     codePriceName: dto.codePriceName,
   };
 }
@@ -411,6 +414,19 @@ export const api = {
         "GET",
         `/student-ui/courses/Allowed/${id}`,
       ),
+
+    // GET /student-ui/courses/suggested/{materialStudy} → 0-3 suggested courses
+    suggested: async (materialStudy: number): Promise<Course[]> => {
+      try {
+        const result = await request<CourseDto[]>(
+          "GET",
+          `/student-ui/courses/suggested/${materialStudy}`,
+        );
+        return (Array.isArray(result) ? result : []).map((dto) => mapCourse(dto));
+      } catch {
+        return [];
+      }
+    },
 
     // Exams come from lessons (CourseLessonDto.examId != null)
     exams: async (courseId: string): Promise<Exam[]> => {

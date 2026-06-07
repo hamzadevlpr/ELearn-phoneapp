@@ -35,6 +35,13 @@ export default function CourseDetailScreen() {
     retry: 1,
   });
 
+  const { data: suggested = [] } = useQuery({
+    queryKey: ["suggested", course?.materialStudy],
+    queryFn: () => api.courses.suggested(course!.materialStudy!),
+    enabled: !!course?.materialStudy,
+    staleTime: 5 * 60 * 1000,
+  });
+
   async function handleCodeSubmit(code: string) {
     if (!id) return;
     await api.courses.enroll(id, code);
@@ -265,6 +272,72 @@ export default function CourseDetailScreen() {
                   </View>
                 );
               })}
+            </View>
+          </View>
+        )}
+
+        {/* ── Recommendations ── */}
+        {suggested.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              {isRTL ? "كورسات مشابهة" : "Recommendations"}
+            </Text>
+            <View style={{ gap: 12 }}>
+              {suggested.filter((s) => s.id !== id).slice(0, 3).map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.recCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => router.push({ pathname: "/course/[id]", params: { id: item.id } })}
+                  activeOpacity={0.82}
+                >
+                  {/* Thumbnail */}
+                  {item.image ? (
+                    <Image
+                      source={{ uri: item.image }}
+                      style={styles.recThumb}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={[styles.recThumb, styles.recThumbPlaceholder, { backgroundColor: colors.primary + "22" }]}>
+                      <Feather name="book-open" size={22} color={colors.primary} />
+                    </View>
+                  )}
+
+                  {/* Info */}
+                  <View style={[styles.recInfo, { alignItems: isRTL ? "flex-end" : "flex-start" }]}>
+                    <Text
+                      style={[styles.recTitle, { color: colors.foreground }]}
+                      numberOfLines={2}
+                    >
+                      {item.title}
+                    </Text>
+                    {item.teacherName ? (
+                      <Text style={[styles.recTeacher, { color: colors.mutedForeground }]} numberOfLines={1}>
+                        {item.teacherName}
+                      </Text>
+                    ) : null}
+                    {item.grade ? (
+                      <View style={[styles.recChip, { backgroundColor: colors.primary + "18" }]}>
+                        <Text style={[styles.recChipText, { color: colors.primary }]}>{item.grade}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {/* Price + arrow */}
+                  <View style={styles.recRight}>
+                    {item.codePriceName ? (
+                      <Text style={[styles.recPrice, { color: colors.primary }]}>
+                        {item.codePriceName}
+                      </Text>
+                    ) : null}
+                    <Feather
+                      name={isRTL ? "chevron-left" : "chevron-right"}
+                      size={18}
+                      color={colors.mutedForeground}
+                    />
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
         )}
@@ -580,5 +653,56 @@ const styles = StyleSheet.create({
   },
   topicMeta: {
     fontSize: 12,
+  },
+
+  recCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: "hidden",
+    padding: 10,
+  },
+  recThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+    flexShrink: 0,
+  },
+  recThumbPlaceholder: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  recTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 20,
+  },
+  recTeacher: {
+    fontSize: 12,
+  },
+  recChip: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  recChipText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  recRight: {
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 0,
+  },
+  recPrice: {
+    fontSize: 13,
+    fontWeight: "700",
   },
 });
