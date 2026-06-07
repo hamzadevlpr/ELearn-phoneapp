@@ -66,9 +66,25 @@ export default function CourseDetailScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
 
-        {/* ── Hero image ── */}
+        {/* ── Hero: intro video (animated webp) or thumbnail ── */}
         <View style={styles.heroContainer}>
-          {course.image ? (
+          {course.introVideoUrl ? (
+            <>
+              <Image
+                source={{ uri: course.introVideoUrl }}
+                style={styles.hero}
+                contentFit="cover"
+                autoplay
+              />
+              {/* "Intro" badge */}
+              <View style={styles.introBadge}>
+                <Feather name="play-circle" size={13} color="#fff" />
+                <Text style={styles.introBadgeText}>
+                  {isRTL ? "مقدمة الكورس" : "Course Preview"}
+                </Text>
+              </View>
+            </>
+          ) : course.image ? (
             <Image source={{ uri: course.image }} style={styles.hero} contentFit="cover" />
           ) : (
             <View style={[styles.heroPlaceholder, { backgroundColor: colors.secondary }]}>
@@ -76,7 +92,7 @@ export default function CourseDetailScreen() {
             </View>
           )}
           <LinearGradient
-            colors={["rgba(0,0,0,0.1)", "rgba(0,0,0,0.65)"]}
+            colors={["rgba(0,0,0,0.05)", "rgba(0,0,0,0.70)"]}
             style={StyleSheet.absoluteFillObject}
           />
           {/* Back button */}
@@ -260,7 +276,26 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
-  heroContainer: { height: 280, position: "relative" },
+  heroContainer: { height: 280, position: "relative", overflow: "hidden" },
+  introBadge: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  introBadgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
   hero: { width: "100%", height: "100%" },
   heroPlaceholder: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
   backBtn: {

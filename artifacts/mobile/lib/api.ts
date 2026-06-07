@@ -30,6 +30,7 @@ interface CourseDto {
   title: string;
   about?: string;
   thumbnailUrl?: string;
+  introVideoUrl?: string;
   codePriceValue?: number;
   totalLessons?: number;
   totaExams?: number;
@@ -78,6 +79,7 @@ export interface Course {
   title: string;
   description?: string;
   image?: string;
+  introVideoUrl?: string;
   price?: number;
   lessonsCount?: number;
   examsCount?: number;
@@ -174,6 +176,7 @@ function mapCourse(dto: CourseDto, isAllowed?: boolean): Course {
     title: dto.title,
     description: dto.about,
     image: dto.thumbnailUrl,
+    introVideoUrl: dto.introVideoUrl,
     price: dto.codePriceValue,
     lessonsCount: dto.totalLessons,
     examsCount: dto.totaExams,
