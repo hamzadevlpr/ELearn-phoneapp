@@ -95,7 +95,7 @@ export default function CourseDetailScreen() {
           {course.introVideoUrl ? (
             <>
               <Image
-                source={{ uri: course.introVideoUrl }}
+                source={{ uri: course.introVideoUrl, headers: { Referer: "https://localhost" } }}
                 style={styles.hero}
                 contentFit="cover"
                 autoplay
