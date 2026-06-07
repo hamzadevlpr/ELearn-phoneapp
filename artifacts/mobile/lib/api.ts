@@ -98,7 +98,8 @@ async function request<T>(
   includeAuth = true
 ): Promise<T> {
   const headers = await buildHeaders(includeAuth);
-  const url = `${APP_CONFIG.API_BASE_URL}${path}`;
+  const separator = path.includes("?") ? "&" : "?";
+  const url = `${APP_CONFIG.API_BASE_URL}${path}${separator}tenantId=${encodeURIComponent(APP_CONFIG.TENANT_ID)}`;
   const res = await fetch(url, {
     method,
     headers,
