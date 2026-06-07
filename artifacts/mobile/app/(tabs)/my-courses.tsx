@@ -75,7 +75,10 @@ export default function MyCoursesScreen() {
             course={{ ...item, isPurchased: true }}
             onPress={async () => {
               await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push({ pathname: "/course/[id]", params: { id: item.id } });
+              router.push({
+                pathname: "/lessons/[id]",
+                params: { id: item.id, title: item.title, image: item.image ?? "" },
+              });
             }}
           />
         )}
