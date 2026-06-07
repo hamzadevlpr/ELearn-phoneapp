@@ -2,18 +2,19 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useEffect } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { TeacherCard } from "@/components/TeacherCard";
+import { CourseCard } from "@/components/CourseCard";
 import { useLanguage } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 import { api } from "@/lib/api";
@@ -22,21 +23,20 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { t, isRTL } = useLanguage();
+  const [search, setSearch] = useState("");
 
-  const { data: teachers, isLoading, error, refetch } = useQuery({
-    queryKey: ["teachers"],
-    queryFn: api.teachers.list,
+  const { data: courses, isLoading, error, refetch } = useQuery({
+    queryKey: ["courses", "all"],
+    queryFn: () => api.courses.list(undefined),
   });
 
-  useEffect(() => {
-    if (teachers && teachers.length === 0) {
-      router.replace({ pathname: "/courses/[teacherId]", params: { teacherId: "" } });
-    }
-  }, [teachers]);
+  const filtered = (courses ?? []).filter((c) =>
+    c.title.toLowerCase().includes(search.toLowerCase())
+  );
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  if (isLoading || (teachers && teachers.length === 0)) {
+  if (isLoading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.primary} size="large" />
@@ -70,38 +70,56 @@ export default function HomeScreen() {
         ]}
       >
         <Text style={[styles.title, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
-          {t.teachers.title}
+          {t.courses.title}
         </Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground, textAlign: isRTL ? "right" : "left" }]}>
-          {t.teachers.subtitle}
-        </Text>
+
+        <View
+          style={[
+            styles.searchRow,
+            {
+              backgroundColor: colors.background,
+              borderColor: colors.border,
+              flexDirection: isRTL ? "row-reverse" : "row",
+            },
+          ]}
+        >
+          <Feather name="search" size={16} color={colors.mutedForeground} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}
+            value={search}
+            onChangeText={setSearch}
+            placeholder={t.courses.search}
+            placeholderTextColor={colors.mutedForeground}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")} hitSlop={8}>
+              <Feather name="x" size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <FlatList
-        data={teachers ?? []}
+        data={filtered}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[
-          styles.list,
-          { paddingBottom: insets.bottom + 100 },
-        ]}
+        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
         renderItem={({ item }) => (
-          <TeacherCard
-            teacher={item}
+          <CourseCard
+            course={item}
             onPress={async () => {
               await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push({ pathname: "/courses/[teacherId]", params: { teacherId: item.id } });
+              router.push({ pathname: "/course/[id]", params: { id: item.id } });
             }}
           />
         )}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Feather name="users" size={48} color={colors.mutedForeground} />
+            <Feather name="book" size={48} color={colors.mutedForeground} />
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              {t.teachers.empty}
+              {t.courses.empty}
             </Text>
           </View>
         }
-        scrollEnabled={!!teachers && teachers.length > 0}
       />
     </View>
   );
@@ -112,16 +130,27 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
   header: {
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 14,
     borderBottomWidth: 1,
-    gap: 4,
+    gap: 14,
   },
   title: {
     fontSize: 26,
     fontWeight: "800",
   },
-  subtitle: {
-    fontSize: 14,
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    height: "100%",
   },
   list: {
     padding: 16,
@@ -135,18 +164,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: "center",
   },
-  errorText: {
-    fontSize: 15,
-    textAlign: "center",
-  },
-  retryBtn: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  retryText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 15,
-  },
+  errorText: { fontSize: 15, textAlign: "center" },
+  retryBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
+  retryText: { color: "#fff", fontWeight: "700", fontSize: 15 },
 });
