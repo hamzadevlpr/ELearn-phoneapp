@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
-import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
+import { Video, ResizeMode, AVPlaybackStatus, VideoFullscreenUpdate, VideoFullscreenUpdateEvent } from "expo-av";
+import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -50,9 +51,33 @@ export function SecuredVideoPlayer({ uri, watermarkText, onClose }: Props) {
     return () => clearInterval(interval);
   }, [opacity]);
 
+  // Reset orientation to portrait when player unmounts
+  useEffect(() => {
+    return () => {
+      if (Platform.OS !== "web") {
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+      }
+    };
+  }, []);
+
   function handleStatus(status: AVPlaybackStatus) {
     if (status.isLoaded) setIsReady(true);
     if (!status.isLoaded && status.error) setError(true);
+  }
+
+  async function handleFullscreenUpdate(event: VideoFullscreenUpdateEvent) {
+    if (Platform.OS === "web") return;
+    if (
+      event.fullscreenUpdate === VideoFullscreenUpdate.PLAYER_DID_PRESENT ||
+      event.fullscreenUpdate === VideoFullscreenUpdate.PLAYER_WILL_PRESENT
+    ) {
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    } else if (
+      event.fullscreenUpdate === VideoFullscreenUpdate.PLAYER_DID_DISMISS ||
+      event.fullscreenUpdate === VideoFullscreenUpdate.PLAYER_WILL_DISMISS
+    ) {
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    }
   }
 
   const wPos = WATERMARK_POSITIONS[posIdx];
@@ -86,6 +111,7 @@ export function SecuredVideoPlayer({ uri, watermarkText, onClose }: Props) {
         useNativeControls
         shouldPlay
         onPlaybackStatusUpdate={handleStatus}
+        onFullscreenUpdate={handleFullscreenUpdate}
       />
 
       {!isReady && (

@@ -16,7 +16,7 @@ export default function PlayerScreen() {
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    let screenCapture: { allowScreenCapture: () => void } | null = null;
+    let screenCapture: { allowScreenCaptureAsync: () => Promise<void> } | null = null;
     (async () => {
       try {
         const sc = await import("expo-screen-capture");
@@ -27,7 +27,7 @@ export default function PlayerScreen() {
       }
     })();
     return () => {
-      if (screenCapture) screenCapture.allowScreenCapture();
+      if (screenCapture) screenCapture.allowScreenCaptureAsync().catch(() => {});
     };
   }, []);
 
