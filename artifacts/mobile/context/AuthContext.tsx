@@ -50,12 +50,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (phone: string, password: string) => {
-    const { token, user } = await api.auth.login(phone, password);
+    const loginData = await api.auth.login(phone, password);
+    const user: User = {
+      id: loginData.userId,
+      name: loginData.fullName,
+      phone: loginData.userName,
+      grade: loginData.studentGrade,
+    };
     await Promise.all([
-      AsyncStorage.setItem("auth_token", token),
+      AsyncStorage.setItem("auth_token", loginData.token),
       AsyncStorage.setItem("auth_user", JSON.stringify(user)),
     ]);
-    setState({ token, user, isLoading: false, isAuthenticated: true });
+    setState({ token: loginData.token, user, isLoading: false, isAuthenticated: true });
   }, []);
 
   const logout = useCallback(async () => {

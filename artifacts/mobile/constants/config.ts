@@ -6,8 +6,8 @@
 
 const APP_CONFIG = {
   APP_NAME: "teachers-eg",
-  TENANT_ID: "1",
-  API_BASE_URL: "https://api.teachers-eg.com/api",
+  TENANT_ID: "30a0f28a-b879-4609-81bb-c1e7c9593ed2",
+  API_BASE_URL: "https://api.teachers-eg.com",
   APP_LOGO: require("../assets/images/icon.png") as ReturnType<typeof require>,
 } as const;
 
