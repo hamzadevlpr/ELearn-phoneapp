@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AccessCodeModal } from "@/components/AccessCodeModal";
 import { useLanguage } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
-import { api } from "@/lib/api";
+import { api, type CourseTopic } from "@/lib/api";
 
 export default function CourseDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -28,10 +28,11 @@ export default function CourseDetailScreen() {
   const queryClient = useQueryClient();
   const [showCodeModal, setShowCodeModal] = useState(false);
 
-  const { data: course, isLoading } = useQuery({
+  const { data: course, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["course", id],
     queryFn: () => api.courses.get(id!),
     enabled: !!id,
+    retry: 1,
   });
 
   async function handleCodeSubmit(code: string) {
@@ -54,10 +55,33 @@ export default function CourseDetailScreen() {
     });
   }
 
-  if (isLoading || !course) {
+  if (isLoading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
+
+  if (isError || !course) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <TouchableOpacity style={styles.backBtnStatic} onPress={() => router.back()}>
+          <Feather name={isRTL ? "arrow-right" : "arrow-left"} size={22} color={colors.foreground} />
+        </TouchableOpacity>
+        <Feather name="wifi-off" size={48} color={colors.mutedForeground} />
+        <Text style={[styles.errorTitle, { color: colors.foreground }]}>
+          {isRTL ? "تعذّر تحميل الكورس" : "Failed to load course"}
+        </Text>
+        <Text style={[styles.errorMsg, { color: colors.mutedForeground }]}>
+          {(error as Error)?.message ?? (isRTL ? "تحقق من الاتصال وحاول مجدداً" : "Check your connection and try again")}
+        </Text>
+        <TouchableOpacity
+          style={[styles.retryBtn, { backgroundColor: colors.primary }]}
+          onPress={() => refetch()}
+        >
+          <Text style={styles.retryBtnText}>{isRTL ? "إعادة المحاولة" : "Retry"}</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -200,6 +224,52 @@ export default function CourseDetailScreen() {
             ))}
           </View>
         </View>
+
+        {/* ── Course content (topics from API) ── */}
+        {course.topics && course.topics.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
+              {isRTL ? "محتوى الكورس" : "Course Content"}
+            </Text>
+            <View style={[styles.topicsContainer, { borderColor: colors.border }]}>
+              {course.topics.map((topic: CourseTopic, index: number) => {
+                const isVideo = topic.courseLessonType === 0;
+                const isPdf = topic.courseLessonType === 1;
+                const isQuiz = topic.courseLessonType === 2;
+                const isArticle = topic.courseLessonType === 3;
+                const iconName = isVideo ? "play-circle" : isPdf ? "file-text" : isQuiz ? "help-circle" : "book-open";
+                const iconColor = isVideo ? "#6c63ff" : isPdf ? "#e74c3c" : isQuiz ? "#f39c12" : "#27ae60";
+                const mins = (topic.totalHours ?? 0) * 60 + (topic.totalMinutes ?? 0);
+                const isLast = index === course.topics.length - 1;
+                return (
+                  <View
+                    key={topic.id}
+                    style={[
+                      styles.topicRow,
+                      { flexDirection: isRTL ? "row-reverse" : "row", borderBottomWidth: isLast ? 0 : 1, borderBottomColor: colors.border },
+                    ]}
+                  >
+                    <View style={[styles.topicIcon, { backgroundColor: iconColor + "18" }]}>
+                      <Feather name={iconName as any} size={16} color={iconColor} />
+                    </View>
+                    <View style={[styles.topicInfo, { alignItems: isRTL ? "flex-end" : "flex-start" }]}>
+                      <Text style={[styles.topicTitle, { color: colors.foreground }]} numberOfLines={2}>
+                        {topic.title}
+                      </Text>
+                      <Text style={[styles.topicMeta, { color: colors.mutedForeground }]}>
+                        {topic.courseLessonTypeName}
+                        {mins > 0 ? ` · ${mins} ${isRTL ? "دقيقة" : "min"}` : ""}
+                      </Text>
+                    </View>
+                    {topic.isNotShowUntilExamPass && (
+                      <Feather name="lock" size={14} color={colors.mutedForeground} style={{ marginStart: isRTL ? 0 : "auto", marginEnd: isRTL ? "auto" : 0 }} />
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         <View style={{ height: insets.bottom + 110 }} />
       </ScrollView>
@@ -449,5 +519,68 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 17,
     fontWeight: "700",
+  },
+
+  backBtnStatic: {
+    position: "absolute",
+    top: 16,
+    left: 16,
+    padding: 8,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  errorMsg: {
+    fontSize: 14,
+    textAlign: "center",
+    marginHorizontal: 32,
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  retryBtn: {
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+
+  topicsContainer: {
+    borderWidth: 1,
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  topicRow: {
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  topicIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  topicInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  topicTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 20,
+  },
+  topicMeta: {
+    fontSize: 12,
   },
 });

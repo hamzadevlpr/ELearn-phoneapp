@@ -62,7 +62,28 @@ interface CourseLessonDto {
 interface CourseWithDetailsDto {
   isAllowed: boolean;
   course: CourseDto;
-  courseTopics?: unknown[];
+  courseTopics?: CourseTopic[];
+}
+
+export interface CourseTopic {
+  id: string;
+  title: string;
+  index: number;
+  courseLessonType: number;
+  courseLessonTypeName: string;
+  description: string | null;
+  fileUrl: string | null;
+  embededUrl: string | null;
+  examId: string | null;
+  articleHtml: string | null;
+  articleId: string | null;
+  previewUrl?: string;
+  isNotShowUntilExamPass: boolean;
+  totalHours: number;
+  totalMinutes: number;
+  quiz: any | null;
+  studentExam: any | null;
+  createdOn?: string;
 }
 
 // ─── App-level types (used by all screens) ───────────────────────────────────
@@ -88,6 +109,11 @@ export interface Course {
   isPurchased?: boolean;
   grade?: string;
   subject?: string;
+}
+
+export interface CourseDetails extends Course {
+  topics: CourseTopic[];
+  isAllowed: boolean;
 }
 
 export interface Lesson {
@@ -189,8 +215,7 @@ function mapCourse(dto: CourseDto, isAllowed?: boolean): Course {
 }
 
 function mapLesson(dto: CourseLessonDto): Lesson {
-  const durationMinutes =
-    (dto.totalHours ?? 0) * 60 + (dto.totalMinutes ?? 0);
+  const durationMinutes = (dto.totalHours ?? 0) * 60 + (dto.totalMinutes ?? 0);
   return {
     id: dto.id,
     title: dto.title,
@@ -257,7 +282,9 @@ async function request<T>(
   const envelope = data as ReponseResult<T>;
   if (envelope?.isFailure) {
     throw new Error(
-      envelope.error?.message ?? envelope.error?.description ?? "Request failed",
+      envelope.error?.message ??
+        envelope.error?.description ??
+        "Request failed",
     );
   }
   return envelope.value;
@@ -298,12 +325,16 @@ export const api = {
     },
 
     // GET /student-ui/courses/{id} → Result<CourseWithDetailsDto>
-    get: async (id: string): Promise<Course> => {
+    get: async (id: string): Promise<CourseDetails> => {
       const result = await request<CourseWithDetailsDto>(
         "GET",
         `/student-ui/courses/${id}`,
       );
-      return mapCourse(result.course, result.isAllowed);
+      return {
+        ...mapCourse(result.course, result.isAllowed),
+        topics: result.courseTopics ?? [],
+        isAllowed: result.isAllowed,
+      };
     },
 
     // POST /student-ui/lessons/list → Result<CourseLessonDto[]>
