@@ -209,9 +209,7 @@ export default function CourseDetailScreen() {
           <View style={styles.featureList}>
             {[
               { icon: "play-circle" as const, color: "#6c63ff", text: isRTL ? `${course.lessonsCount ?? 0} فيديو تعليمي` : `${course.lessonsCount ?? 0} video lessons` },
-              { icon: "help-circle" as const, color: "#f39c12", text: isRTL ? `${course.examsCount ?? 0} اختبار تفاعلي` : `${course.examsCount ?? 0} interactive quizzes` },
-              { icon: "smartphone" as const, color: "#27ae60", text: isRTL ? "وصول من أي جهاز" : "Access on any device" },
-              { icon: "clock" as const, color: "#3498db", text: isRTL ? "وصول مدى الحياة" : "Lifetime access" },
+              { icon: "help-circle" as const, color: "#f39c12", text: isRTL ? `${course.examsCount ?? 0} اختبار تفاعلي` : `${course.examsCount ?? 0} interactive quizzes` }
             ].map((f, i) => (
               <View key={i} style={[styles.featureRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
                 <View style={[styles.featureIcon, { backgroundColor: f.color + "20" }]}>
