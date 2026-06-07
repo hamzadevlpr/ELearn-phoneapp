@@ -29,14 +29,14 @@ export default function HomeScreen() {
   });
 
   useEffect(() => {
-    if (teachers && teachers.length === 1) {
-      router.replace({ pathname: "/courses/[teacherId]", params: { teacherId: teachers[0].id } });
+    if (teachers && teachers.length === 0) {
+      router.replace({ pathname: "/courses/[teacherId]", params: { teacherId: "" } });
     }
   }, [teachers]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  if (isLoading || (teachers && teachers.length === 1)) {
+  if (isLoading || (teachers && teachers.length === 0)) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.primary} size="large" />

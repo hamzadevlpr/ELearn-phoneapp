@@ -159,7 +159,7 @@ export const api = {
       ),
   },
   teachers: {
-    list: () => request<Teacher[]>("GET", "/Teacher"),
+    list: () => request<Teacher[]>("GET", "/student-ui/portal-teacher"),
   },
   courses: {
     list: (teacherId?: string) =>
