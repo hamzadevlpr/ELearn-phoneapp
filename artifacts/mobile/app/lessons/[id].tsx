@@ -294,24 +294,26 @@ function LessonRow({
       case LESSON_TYPE.Video:
         router.push({
           pathname: "/player/[id]",
-          params: { id: lesson.id, videoUrl: lesson.videoUrl ?? "" },
+          params: { id: lesson.id, videoUrl: lesson.fileUrl ?? lesson.videoUrl ?? "" },
         });
         break;
       case LESSON_TYPE.Pdf:
-        if (lesson.videoUrl) Linking.openURL(lesson.videoUrl);
+        if (lesson.fileUrl ?? lesson.videoUrl)
+          Linking.openURL((lesson.fileUrl ?? lesson.videoUrl)!);
         break;
       case LESSON_TYPE.Quiz:
         if (lesson.examId)
           router.push({ pathname: "/exam/[id]", params: { id: lesson.examId } });
         break;
       case LESSON_TYPE.Article:
-        if (lesson.videoUrl) Linking.openURL(lesson.videoUrl);
+        if (lesson.fileUrl ?? lesson.videoUrl)
+          Linking.openURL((lesson.fileUrl ?? lesson.videoUrl)!);
         break;
       default:
-        if (lesson.videoUrl)
+        if (lesson.fileUrl ?? lesson.videoUrl)
           router.push({
             pathname: "/player/[id]",
-            params: { id: lesson.id, videoUrl: lesson.videoUrl },
+            params: { id: lesson.id, videoUrl: lesson.fileUrl ?? lesson.videoUrl ?? "" },
           });
     }
   }

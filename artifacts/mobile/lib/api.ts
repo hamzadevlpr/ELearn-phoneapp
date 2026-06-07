@@ -92,6 +92,8 @@ export interface Lesson {
   id: string;
   title: string;
   duration?: number;
+  fileUrl?: string;
+  embededUrl?: string;
   videoUrl?: string;
   isLocked?: boolean;
   order?: number;
@@ -190,6 +192,8 @@ function mapLesson(dto: CourseLessonDto): Lesson {
     id: dto.id,
     title: dto.title,
     description: dto.description,
+    fileUrl: dto.fileUrl,
+    embededUrl: dto.embededUrl,
     videoUrl: dto.fileUrl ?? dto.embededUrl,
     order: dto.index,
     duration: durationMinutes || undefined,

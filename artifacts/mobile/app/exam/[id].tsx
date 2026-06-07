@@ -71,10 +71,19 @@ export default function ExamScreen() {
         <View
           style={[
             styles.header,
-            { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border },
+            {
+              paddingTop: topPad + 12,
+              backgroundColor: colors.card,
+              borderBottomColor: colors.border,
+              flexDirection: isRTL ? "row-reverse" : "row",
+            },
           ]}
         >
+          <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
+            <Feather name={isRTL ? "arrow-right" : "arrow-left"} size={24} color={colors.foreground} />
+          </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t.exam.result}</Text>
+          <View style={{ width: 24 }} />
         </View>
 
         <ScrollView contentContainerStyle={[styles.resultScroll, { paddingBottom: insets.bottom + 40 }]}>
