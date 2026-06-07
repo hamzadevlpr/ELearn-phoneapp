@@ -96,19 +96,44 @@ export interface Teacher {
 }
 
 export interface Course {
-  id: string;
-  title: string;
-  description?: string;
-  image?: string;
-  introVideoUrl?: string;
-  price?: number;
-  lessonsCount?: number;
-  examsCount?: number;
-  teacherName?: string;
-  teacherId?: string;
-  isPurchased?: boolean;
-  grade?: string;
-  subject?: string;
+  about: string | null;
+  codePriceId: string; // UUID string
+  codePriceName: string; // e.g., "70"
+  codePriceValue: number | null;
+  courseStatusName: string; // e.g., "يظهر الان"
+  createdOn: string; // ISO Date string
+  discount: number | null;
+  id: string; // UUID string
+  introVideoUrl: string; // URL string
+  language: number; // e.g., 1
+  mainTeacherAvatar: string | null;
+  mainTeacherId: string; // UUID string
+  mainTeacherName: string;
+  materialStudy: number;
+  materialStudyName: string; // e.g., "Mathematics"
+  portalTeacherAvatar: string | null;
+  portalTeacherId: string | null;
+  portalTeacherName: string | null;
+  priceType: number;
+  startDate: string; // ISO Date string
+  status: number;
+  studentGrade: number; // e.g., 8
+  studentGradeName: string; // e.g., "الصف الثانى الاعدادى"
+  teacherAvatar: string | null;
+  teacherId: string; // UUID string
+  teacherName: string;
+  teacherPhone: string;
+  teacherWhatsapp: string;
+  thumbnailUrl: string; // S3 URL string
+  title: string; // e.g., "M2_EXAM NIGHT "
+  totaDocuments: number; // Note: kept the typo 'tota' from the backend key
+  totaExams: number; // Note: kept the typo 'tota' from the backend key
+  totalDurationHours: number;
+  totalDurationMinutes: number;
+  totalLessons: number;
+  totalStudents: number | null;
+  totalUsedCodes: number;
+  totalViews: number;
 }
 
 export interface CourseDetails extends Course {
@@ -255,6 +280,7 @@ async function request<T>(
   path: string,
   body?: unknown,
   includeAuth = true,
+  rawResponse = false,
 ): Promise<T> {
   const headers = await buildHeaders(includeAuth);
   const separator = path.includes("?") ? "&" : "?";
@@ -278,6 +304,10 @@ async function request<T>(
       envelope?.error?.description ??
       `HTTP ${res.status}`;
     throw new Error(message);
+  }
+  // Some endpoints return the DTO directly (no ReponseResult wrapper)
+  if (rawResponse) {
+    return data as T;
   }
   const envelope = data as ReponseResult<T>;
   if (envelope?.isFailure) {
@@ -324,11 +354,14 @@ export const api = {
       return (result?.data ?? []).map((dto) => mapCourse(dto));
     },
 
-    // GET /student-ui/courses/{id} → Result<CourseWithDetailsDto>
+    // GET /student-ui/courses/{id} → CourseWithDetailsDto (no ReponseResult wrapper)
     get: async (id: string): Promise<CourseDetails> => {
       const result = await request<CourseWithDetailsDto>(
         "GET",
         `/student-ui/courses/${id}`,
+        undefined,
+        true,
+        true, // rawResponse — endpoint returns the object directly, not wrapped in ReponseResult
       );
       return {
         ...mapCourse(result.course, result.isAllowed),
