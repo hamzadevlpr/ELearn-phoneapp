@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 
 interface Props {
@@ -29,6 +30,7 @@ const WATERMARK_POSITIONS = [
 
 export function SecuredVideoPlayer({ uri, watermarkText, onClose }: Props) {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
   const [posIdx, setPosIdx] = useState(0);
   const opacity = useRef(new Animated.Value(0.35)).current;
@@ -70,7 +72,7 @@ export function SecuredVideoPlayer({ uri, watermarkText, onClose }: Props) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <Video
         ref={videoRef}
         source={{
