@@ -73,7 +73,12 @@ export function SecuredVideoPlayer({ uri, watermarkText, onClose }: Props) {
     <View style={styles.container}>
       <Video
         ref={videoRef}
-        source={{ uri }}
+        source={{
+          uri,
+          headers: {
+            Referer: "https://localhost",
+          },
+        }}
         style={styles.video}
         resizeMode={ResizeMode.CONTAIN}
         useNativeControls
