@@ -165,7 +165,7 @@ export default function CourseDetailScreen() {
           <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
           <StatItem
             icon="tag"
-            value={course.price ? `${course.price} ج` : (isRTL ? "مجاني" : "Free")}
+            value={course.codePriceName ?? (course.price ? `${course.price} ج` : (isRTL ? "مجاني" : "Free"))}
             label={isRTL ? "السعر" : "Price"}
             color={colors.primary}
             isText

@@ -236,6 +236,7 @@ function mapCourse(dto: CourseDto, isAllowed?: boolean): Course {
     isPurchased: isAllowed,
     grade: dto.studentGradeName,
     subject: dto.materialStudyName,
+    codePriceName: dto.codePriceName,
   };
 }
 
