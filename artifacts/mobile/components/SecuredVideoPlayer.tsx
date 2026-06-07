@@ -1,31 +1,10 @@
 import { Feather } from "@expo/vector-icons";
-import {
-  Video,
-  ResizeMode,
-  AVPlaybackStatus,
-  VideoFullscreenUpdate,
-  VideoFullscreenUpdateEvent,
-} from "expo-av";
 import * as ScreenCapture from "expo-screen-capture";
 import * as ScreenOrientation from "expo-screen-orientation";
-import React, { useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Animated,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
-} from "react-native";
+import React, { useEffect, useRef } from "react";
+import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useColors } from "@/hooks/useColors";
-
-interface QualityOption {
-  label: string;
-  uri: string;
-}
+import WebView from "react-native-webview";
 
 interface Props {
   uri: string;
@@ -33,63 +12,219 @@ interface Props {
   onClose?: () => void;
 }
 
-const WATERMARK_POSITIONS = [
-  { top: "15%", left: "10%" },
-  { top: "15%", right: "10%" },
-  { top: "45%", left: "20%" },
-  { top: "45%", right: "20%" },
-  { top: "75%", left: "10%" },
-  { top: "75%", right: "10%" },
-] as const;
+function buildPlayerHtml(videoUrl: string, watermarkText: string): string {
+  // Safely escape values for inline JS string literals
+  const safeUrl = videoUrl.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  const safeWm = watermarkText
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 
-const VIDEO_HEADERS = { Referer: "https://localhost" };
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <link href="https://vjs.zencdn.net/8.6.1/video-js.css" rel="stylesheet"/>
+  <script src="https://vjs.zencdn.net/8.6.1/video.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-quality-levels@4.0.0/dist/videojs-contrib-quality-levels.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body{background:#000;width:100%;height:100%;overflow:hidden}
+    .video-js{width:100%!important;height:100vh!important}
 
-async function parseM3U8Qualities(masterUri: string): Promise<QualityOption[]> {
-  try {
-    const res = await fetch(masterUri, { headers: VIDEO_HEADERS });
-    const text = await res.text();
-    if (!text.includes("#EXT-X-STREAM-INF")) {
-      return [{ label: "Auto", uri: masterUri }];
+    /* ── Watermark ───────────────────────────── */
+    .vjs-wm{
+      position:absolute;
+      color:rgba(255,255,255,0.45);
+      font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+      font-size:13px;font-weight:600;letter-spacing:1px;
+      pointer-events:none;z-index:9999;
+      text-shadow:0 1px 4px rgba(0,0,0,0.95);
+      transition:opacity 0.4s;
+      user-select:none;-webkit-user-select:none;
     }
-    const options: QualityOption[] = [{ label: "Auto", uri: masterUri }];
-    const lines = text.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].startsWith("#EXT-X-STREAM-INF")) {
-        const resMatch = lines[i].match(/RESOLUTION=\d+x(\d+)/);
-        const nextLine = lines[i + 1]?.trim();
-        if (nextLine && !nextLine.startsWith("#")) {
-          const height = resMatch ? resMatch[1] : null;
-          const qualityUri = nextLine.startsWith("http")
-            ? nextLine
-            : new URL(nextLine, masterUri).href;
-          const label = height ? `${height}p` : `Quality ${options.length}`;
-          if (!options.find((o) => o.label === label)) {
-            options.push({ label, uri: qualityUri });
-          }
-        }
-      }
+
+    /* ── Quality button ──────────────────────── */
+    .vjs-q-btn{
+      cursor:pointer;
+      position:absolute;top:12px;right:12px;
+      display:none;align-items:center;gap:5px;
+      background:rgba(0,0,0,0.55);
+      border:1px solid rgba(255,255,255,0.25);
+      border-radius:20px;
+      padding:5px 12px;
+      color:#fff;font-size:12px;font-weight:700;
+      font-family:-apple-system,sans-serif;
+      z-index:9998;
     }
-    return options;
-  } catch {
-    return [{ label: "Auto", uri: masterUri }];
+    .vjs-q-btn svg{width:13px;height:13px;fill:#fff;flex-shrink:0}
+
+    /* ── Quality menu ────────────────────────── */
+    .vjs-q-menu{
+      position:absolute;bottom:56px;right:0;left:0;
+      background:rgba(14,14,32,0.97);
+      border-radius:20px 20px 0 0;
+      overflow:hidden;z-index:9998;
+      display:none;
+    }
+    .vjs-q-menu.open{display:block}
+    .vjs-q-title{
+      color:rgba(255,255,255,0.4);
+      font-size:11px;font-weight:700;
+      text-transform:uppercase;letter-spacing:1.2px;
+      padding:14px 18px 8px;
+      font-family:-apple-system,sans-serif;
+    }
+    .vjs-q-item{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:13px 18px;
+      color:rgba(255,255,255,0.8);
+      font-size:15px;font-family:-apple-system,sans-serif;
+      cursor:pointer;
+    }
+    .vjs-q-item.active{background:rgba(108,99,255,0.18);color:#fff}
+    .vjs-q-check{color:#6c63ff;font-size:14px;font-weight:700}
+    .vjs-q-spacer{height:8px}
+  </style>
+</head>
+<body>
+<video id="vid"
+  class="video-js vjs-default-skin vjs-big-play-centered"
+  playsinline controls>
+</video>
+
+<script>
+(function(){
+  var VIDEO_URL = '${safeUrl}';
+  var WM_TEXT   = '${safeWm}';
+
+  var WM_POS = [
+    {top:'12%',left:'8%'}, {top:'12%',right:'8%'},
+    {top:'45%',left:'15%'},{top:'45%',right:'15%'},
+    {top:'78%',left:'8%'}, {top:'78%',right:'8%'},
+  ];
+  var wmIdx = 0;
+
+  // ── Player ──────────────────────────────────────────────────────────────
+  var player = videojs('vid', {
+    autoplay: true,
+    controls: true,
+    fill: true,
+    html5: { vhs: { overrideNative: true } },
+  });
+
+  player.src({
+    src: VIDEO_URL,
+    type: VIDEO_URL.indexOf('.m3u8') !== -1
+      ? 'application/x-mpegURL'
+      : 'video/mp4',
+  });
+
+  // ── Watermark ────────────────────────────────────────────────────────────
+  var wm = document.createElement('div');
+  wm.className = 'vjs-wm';
+  wm.textContent = WM_TEXT;
+  player.el().appendChild(wm);
+
+  function applyWmPos() {
+    var p = WM_POS[wmIdx % WM_POS.length];
+    wm.style.top    = p.top    || '';
+    wm.style.bottom = p.bottom || '';
+    wm.style.left   = p.left   || '';
+    wm.style.right  = p.right  || '';
   }
+  applyWmPos();
+  setInterval(function() {
+    wm.style.opacity = '0';
+    setTimeout(function() { wmIdx++; applyWmPos(); wm.style.opacity = '1'; }, 400);
+  }, 7000);
+
+  // ── Quality picker ───────────────────────────────────────────────────────
+  var qualityLevels = player.qualityLevels();
+  var levels = [];          // collected height values (unique, sorted desc)
+  var currentLabel = 'Auto';
+  var menuOpen = false;
+
+  // Button
+  var qBtn = document.createElement('button');
+  qBtn.className = 'vjs-q-btn';
+  qBtn.innerHTML =
+    '<svg viewBox="0 0 24 24"><path d="M3 5h18v2H3zm0 6h18v2H3zm0 6h18v2H3z"/></svg>' +
+    '<span id="q-label">Auto</span>';
+  player.el().appendChild(qBtn);
+
+  // Menu
+  var qMenu = document.createElement('div');
+  qMenu.className = 'vjs-q-menu';
+  player.el().appendChild(qMenu);
+
+  function buildMenu() {
+    qMenu.innerHTML =
+      '<div class="vjs-q-title">Video Quality</div>';
+
+    // Auto
+    var autoEl = document.createElement('div');
+    autoEl.className = 'vjs-q-item' + (currentLabel === 'Auto' ? ' active' : '');
+    autoEl.innerHTML = 'Auto' +
+      (currentLabel === 'Auto' ? '<span class="vjs-q-check">✓</span>' : '');
+    autoEl.onclick = function() {
+      for (var i = 0; i < qualityLevels.length; i++) qualityLevels[i].enabled = true;
+      currentLabel = 'Auto';
+      document.getElementById('q-label').textContent = 'Auto';
+      closeMenu(); buildMenu();
+    };
+    qMenu.appendChild(autoEl);
+
+    // Resolution options high → low
+    for (var i = levels.length - 1; i >= 0; i--) {
+      (function(h) {
+        var label = h + 'p';
+        var el = document.createElement('div');
+        el.className = 'vjs-q-item' + (currentLabel === label ? ' active' : '');
+        el.innerHTML = label +
+          (currentLabel === label ? '<span class="vjs-q-check">✓</span>' : '');
+        el.onclick = function() {
+          for (var j = 0; j < qualityLevels.length; j++) {
+            qualityLevels[j].enabled = (qualityLevels[j].height === h);
+          }
+          currentLabel = label;
+          document.getElementById('q-label').textContent = label;
+          closeMenu(); buildMenu();
+        };
+        qMenu.appendChild(el);
+      })(levels[i]);
+    }
+    qMenu.appendChild(Object.assign(document.createElement('div'), {className:'vjs-q-spacer'}));
+  }
+
+  function closeMenu()  { menuOpen = false; qMenu.classList.remove('open'); }
+  function toggleMenu(e){ e.stopPropagation(); menuOpen = !menuOpen; qMenu.classList.toggle('open', menuOpen); }
+
+  qBtn.addEventListener('click', toggleMenu);
+  document.addEventListener('click', function() { if (menuOpen) closeMenu(); });
+
+  // Collect quality levels as VHS parses the manifest
+  qualityLevels.on('addqualitylevel', function(e) {
+    var h = e.qualityLevel && e.qualityLevel.height;
+    if (h && levels.indexOf(h) === -1) {
+      levels.push(h);
+      levels.sort(function(a, b) { return a - b; });
+      if (levels.length >= 1) { qBtn.style.display = 'flex'; buildMenu(); }
+    }
+  });
+})();
+</script>
+</body>
+</html>`;
 }
 
 export function SecuredVideoPlayer({ uri, watermarkText, onClose }: Props) {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
-  const videoRef = useRef<Video>(null);
+  const webViewRef = useRef<WebView>(null);
 
-  const [posIdx, setPosIdx] = useState(0);
-  const opacity = useRef(new Animated.Value(0.35)).current;
-  const [isReady, setIsReady] = useState(false);
-  const [error, setError] = useState(false);
-
-  const [qualities, setQualities] = useState<QualityOption[]>([]);
-  const [activeQuality, setActiveQuality] = useState<QualityOption>({ label: "Auto", uri });
-  const [showQualityMenu, setShowQualityMenu] = useState(false);
-
-  // ── Screen capture / recording prevention ────────────────────────────────
+  // ── Screen capture prevention ─────────────────────────────────────────────
   useEffect(() => {
     if (Platform.OS === "web") return;
     ScreenCapture.preventScreenCaptureAsync().catch(() => {});
@@ -98,166 +233,42 @@ export function SecuredVideoPlayer({ uri, watermarkText, onClose }: Props) {
     };
   }, []);
 
-  // ── Watermark rotation ────────────────────────────────────────────────────
-  useEffect(() => {
-    const interval = setInterval(() => {
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.35, duration: 400, useNativeDriver: true }),
-      ]).start();
-      setTimeout(() => setPosIdx((i) => (i + 1) % WATERMARK_POSITIONS.length), 400);
-    }, 7000);
-    return () => clearInterval(interval);
-  }, [opacity]);
-
   // ── Reset orientation on unmount ──────────────────────────────────────────
   useEffect(() => {
     return () => {
       if (Platform.OS !== "web") {
-        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+        ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.PORTRAIT_UP
+        ).catch(() => {});
       }
     };
   }, []);
 
-  // ── Parse M3U8 quality levels ─────────────────────────────────────────────
-  useEffect(() => {
-    const initial: QualityOption = { label: "Auto", uri };
-    setActiveQuality(initial);
-    setQualities([]);
-    if (!uri.includes(".m3u8")) return;
-    parseM3U8Qualities(uri).then((opts) => {
-      setQualities(opts);
-    });
-  }, [uri]);
-
-  function handleStatus(status: AVPlaybackStatus) {
-    if (status.isLoaded) setIsReady(true);
-    if (!status.isLoaded && status.error) setError(true);
-  }
-
-  async function handleFullscreenUpdate(event: VideoFullscreenUpdateEvent) {
-    if (Platform.OS === "web") return;
-    if (
-      event.fullscreenUpdate === VideoFullscreenUpdate.PLAYER_DID_PRESENT ||
-      event.fullscreenUpdate === VideoFullscreenUpdate.PLAYER_WILL_PRESENT
-    ) {
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-    } else if (
-      event.fullscreenUpdate === VideoFullscreenUpdate.PLAYER_DID_DISMISS ||
-      event.fullscreenUpdate === VideoFullscreenUpdate.PLAYER_WILL_DISMISS
-    ) {
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-    }
-  }
-
-  function selectQuality(q: QualityOption) {
-    setActiveQuality(q);
-    setShowQualityMenu(false);
-    setIsReady(false);
-  }
-
-  const wPos = WATERMARK_POSITIONS[posIdx];
-
-  if (error) {
-    return (
-      <View style={[styles.errorContainer, { backgroundColor: "#000" }]}>
-        <Feather name="alert-circle" size={40} color={colors.destructive} />
-        <Text style={styles.errorText}>Failed to load video</Text>
-        {onClose && (
-          <TouchableOpacity
-            style={[styles.closeBtn, { backgroundColor: colors.primary }]}
-            onPress={onClose}
-          >
-            <Text style={styles.closeBtnText}>Close</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  }
+  const html = buildPlayerHtml(uri, watermarkText);
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-      <Video
-        ref={videoRef}
-        source={{ uri: activeQuality.uri, headers: VIDEO_HEADERS }}
-        style={styles.video}
-        resizeMode={ResizeMode.CONTAIN}
-        useNativeControls
-        shouldPlay
-        onPlaybackStatusUpdate={handleStatus}
-        onFullscreenUpdate={handleFullscreenUpdate}
+      <WebView
+        ref={webViewRef}
+        source={{ html, baseUrl: "https://localhost" }}
+        style={styles.webview}
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+        allowsFullscreenVideo
+        javaScriptEnabled
+        domStorageEnabled
+        originWhitelist={["*"]}
+        onShouldStartLoadWithRequest={() => true}
       />
 
-      {/* Loading overlay */}
-      {!isReady && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator color="#fff" size="large" />
-        </View>
-      )}
-
-      {/* Watermark */}
-      <Animated.View
-        style={[styles.watermark, { opacity }, wPos as Record<string, unknown>]}
-        pointerEvents="none"
-      >
-        <Text style={styles.watermarkText}>{watermarkText}</Text>
-      </Animated.View>
-
-      {/* Back button */}
-      {onClose && Platform.OS !== "web" && (
+      {/* Back button — React Native overlay so it's always reachable */}
+      {onClose && (
         <TouchableOpacity
           style={[styles.backBtn, { top: insets.top + 8 }]}
           onPress={onClose}
         >
           <Feather name="arrow-left" size={22} color="#fff" />
         </TouchableOpacity>
-      )}
-
-      {/* Quality button — only shown for HLS with parsed options */}
-      {qualities.length > 1 && (
-        <TouchableOpacity
-          style={[styles.qualityBtn, { top: insets.top + 8 }]}
-          onPress={() => setShowQualityMenu((v) => !v)}
-          activeOpacity={0.85}
-        >
-          <Feather name="sliders" size={14} color="#fff" />
-          <Text style={styles.qualityBtnText}>{activeQuality.label}</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Quality menu overlay */}
-      {showQualityMenu && (
-        <TouchableWithoutFeedback onPress={() => setShowQualityMenu(false)}>
-          <View style={styles.qualityOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.qualityMenu}>
-                <Text style={styles.qualityMenuTitle}>Video Quality</Text>
-                {qualities.map((q) => (
-                  <TouchableOpacity
-                    key={q.label}
-                    style={[
-                      styles.qualityOption,
-                      activeQuality.label === q.label && styles.qualityOptionActive,
-                    ]}
-                    onPress={() => selectQuality(q)}
-                  >
-                    <Text
-                      style={[
-                        styles.qualityOptionText,
-                        activeQuality.label === q.label && styles.qualityOptionTextActive,
-                      ]}
-                    >
-                      {q.label}
-                    </Text>
-                    {activeQuality.label === q.label && (
-                      <Feather name="check" size={16} color="#6c63ff" />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
       )}
     </View>
   );
@@ -267,47 +278,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
-    position: "relative",
   },
-  video: {
+  webview: {
     flex: 1,
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.6)",
-  },
-  watermark: {
-    position: "absolute",
-    zIndex: 10,
-  } as ReturnType<typeof StyleSheet.flatten>,
-  watermarkText: {
-    color: "rgba(255,255,255,0.5)",
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 1,
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 16,
-  },
-  errorText: {
-    color: "#fff",
-    fontSize: 16,
-  },
-  closeBtn: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginTop: 8,
-  },
-  closeBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 15,
+    backgroundColor: "#000",
   },
   backBtn: {
     position: "absolute",
@@ -315,74 +289,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.55)",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 20,
-  },
-
-  // Quality button
-  qualityBtn: {
-    position: "absolute",
-    right: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    zIndex: 20,
-  },
-  qualityBtnText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-
-  // Quality menu
-  qualityOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 30,
-    justifyContent: "flex-end",
-  },
-  qualityMenu: {
-    backgroundColor: "#1a1a2e",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 16,
-    paddingBottom: 32,
-    paddingHorizontal: 20,
-    gap: 4,
-  },
-  qualityMenuTitle: {
-    color: "rgba(255,255,255,0.5)",
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  qualityOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-  },
-  qualityOptionActive: {
-    backgroundColor: "rgba(108,99,255,0.15)",
-  },
-  qualityOptionText: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  qualityOptionTextActive: {
-    color: "#fff",
-    fontWeight: "700",
+    zIndex: 100,
   },
 });
