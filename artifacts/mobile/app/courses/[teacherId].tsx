@@ -28,8 +28,7 @@ export default function CoursesScreen() {
 
   const { data: courses, isLoading, error, refetch } = useQuery({
     queryKey: ["courses", teacherId],
-    queryFn: () => api.courses.list(teacherId),
-    enabled: !!teacherId,
+    queryFn: () => api.courses.list(teacherId || undefined),
   });
 
   const filtered = (courses ?? []).filter((c) =>
@@ -70,13 +69,17 @@ export default function CoursesScreen() {
         ]}
       >
         <View style={[styles.headerRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
-            <Feather
-              name={isRTL ? "arrow-right" : "arrow-left"}
-              size={24}
-              color={colors.foreground}
-            />
-          </TouchableOpacity>
+          {teacherId ? (
+            <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
+              <Feather
+                name={isRTL ? "arrow-right" : "arrow-left"}
+                size={24}
+                color={colors.foreground}
+              />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 24 }} />
+          )}
           <Text style={[styles.title, { color: colors.foreground }]}>{t.courses.title}</Text>
           <View style={{ width: 24 }} />
         </View>
