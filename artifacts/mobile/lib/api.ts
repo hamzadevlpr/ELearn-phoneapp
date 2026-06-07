@@ -165,7 +165,7 @@ export const api = {
     list: (teacherId?: string) =>
       request<Course[]>(
         "GET",
-        `/Course${teacherId ? `?teacherId=${teacherId}` : ""}`,
+        `/student-ui/courses/list${teacherId ? `?teacherId=${teacherId}` : ""}`,
       ),
     get: (id: string) => request<Course>("GET", `/Course/${id}`),
     redeem: (courseId: string, code: string) =>
