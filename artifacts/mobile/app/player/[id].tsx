@@ -1,26 +1,19 @@
-import { useQuery } from "@tanstack/react-query";
+import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SecuredVideoPlayer } from "@/components/SecuredVideoPlayer";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
-import { api } from "@/lib/api";
 
 export default function PlayerScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, videoUrl } = useLocalSearchParams<{ id: string; videoUrl?: string }>();
   const colors = useColors();
   const { t } = useLanguage();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-
-  const { data: lesson, isLoading, error } = useQuery({
-    queryKey: ["lesson", id],
-    queryFn: () => api.lessons.get(id!),
-    enabled: !!id,
-  });
 
   useEffect(() => {
     let screenCapture: { allowScreenCapture: () => void } | null = null;
@@ -30,28 +23,25 @@ export default function PlayerScreen() {
         await sc.preventScreenCaptureAsync();
         screenCapture = sc;
       } catch {
-        // Graceful fallback — screen capture protection not available
+        // Screen capture protection not available on this platform
       }
     })();
     return () => {
-      if (screenCapture) {
-        screenCapture.allowScreenCapture();
-      }
+      if (screenCapture) screenCapture.allowScreenCapture();
     };
   }, []);
 
-  if (isLoading) {
+  if (!videoUrl) {
     return (
       <View style={[styles.center, { backgroundColor: "#000" }]}>
-        <ActivityIndicator color={colors.primary} size="large" />
-      </View>
-    );
-  }
-
-  if (error || !lesson?.videoUrl) {
-    return (
-      <View style={[styles.center, { backgroundColor: "#000" }]}>
+        <Feather name="alert-circle" size={48} color="#ff6b6b" />
         <Text style={styles.errorText}>{t.player.error}</Text>
+        <TouchableOpacity
+          style={[styles.backBtn, { top: insets.top + 8 }]}
+          onPress={() => router.back()}
+        >
+          <Feather name="arrow-left" size={22} color="#fff" />
+        </TouchableOpacity>
       </View>
     );
   }
@@ -61,7 +51,7 @@ export default function PlayerScreen() {
   return (
     <View style={styles.container}>
       <SecuredVideoPlayer
-        uri={lesson.videoUrl}
+        uri={videoUrl}
         watermarkText={watermark}
         onClose={() => router.back()}
       />
@@ -84,5 +74,16 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     textAlign: "center",
+    paddingHorizontal: 32,
+  },
+  backBtn: {
+    position: "absolute",
+    left: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

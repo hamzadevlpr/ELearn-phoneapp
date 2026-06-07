@@ -7,7 +7,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -19,9 +19,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AccessCodeModal } from "@/components/AccessCodeModal";
 import { useLanguage } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
-import { api, Lesson, Exam } from "@/lib/api";
+import { api, Lesson } from "@/lib/api";
 
-type Tab = "lessons" | "exams" | "about";
+// ─── Lesson type enum ────────────────────────────────────────────────────────
+const LESSON_TYPE = { Video: 0, Pdf: 1, Quiz: 2, Article: 3 } as const;
+
+type Tab = "content" | "about";
 
 export default function CourseDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -30,7 +33,7 @@ export default function CourseDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
 
-  const [tab, setTab] = useState<Tab>("lessons");
+  const [tab, setTab] = useState<Tab>("content");
   const [showCodeModal, setShowCodeModal] = useState(false);
 
   const { data: course, isLoading: courseLoading } = useQuery({
@@ -42,30 +45,16 @@ export default function CourseDetailScreen() {
   const { data: lessons, isLoading: lessonsLoading } = useQuery({
     queryKey: ["lessons", id],
     queryFn: () => api.courses.lessons(id!),
-    enabled: !!id && tab === "lessons",
-  });
-
-  const { data: exams, isLoading: examsLoading } = useQuery({
-    queryKey: ["exams", id],
-    queryFn: () => api.courses.exams(id!),
-    enabled: !!id && tab === "exams",
+    enabled: !!id,
   });
 
   async function handleCodeSubmit(code: string) {
     if (!id) return;
-    await api.courses.redeem(id, code);
+    await api.courses.enroll(id, code);
     await queryClient.invalidateQueries({ queryKey: ["course", id] });
     await queryClient.invalidateQueries({ queryKey: ["my-courses"] });
     setShowCodeModal(false);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }
-
-  function handleEnter() {
-    if (course?.isPurchased) {
-      setTab("lessons");
-    } else {
-      setShowCodeModal(true);
-    }
   }
 
   if (courseLoading || !course) {
@@ -76,15 +65,20 @@ export default function CourseDetailScreen() {
     );
   }
 
+  const videoCount = lessons?.filter((l) => l.type === LESSON_TYPE.Video).length ?? 0;
+  const pdfCount = lessons?.filter((l) => l.type === LESSON_TYPE.Pdf).length ?? 0;
+  const quizCount = lessons?.filter((l) => l.type === LESSON_TYPE.Quiz).length ?? 0;
+  const articleCount = lessons?.filter((l) => l.type === LESSON_TYPE.Article).length ?? 0;
+
   const tabs: { key: Tab; label: string }[] = [
-    { key: "lessons", label: t.courseDetail.lessons },
-    { key: "exams", label: t.courseDetail.exams },
-    { key: "about", label: t.courseDetail.about },
+    { key: "content", label: isRTL ? "المحتوى" : "Content" },
+    { key: "about", label: isRTL ? "عن الكورس" : "About" },
   ];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]}>
+        {/* ── Hero ── */}
         <View style={styles.heroContainer}>
           {course.image ? (
             <Image source={{ uri: course.image }} style={styles.hero} contentFit="cover" />
@@ -94,7 +88,7 @@ export default function CourseDetailScreen() {
             </View>
           )}
           <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.7)"]}
+            colors={["transparent", "rgba(0,0,0,0.75)"]}
             style={styles.heroGradient}
           />
           <TouchableOpacity
@@ -105,29 +99,30 @@ export default function CourseDetailScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* ── Tab bar (sticky) ── */}
         <View style={[styles.tabBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           {tabs.map((tb) => (
             <TouchableOpacity
               key={tb.key}
-              style={[styles.tabItem, tab === tb.key && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
+              style={[
+                styles.tabItem,
+                tab === tb.key && { borderBottomColor: colors.primary, borderBottomWidth: 2.5 },
+              ]}
               onPress={() => setTab(tb.key)}
             >
-              <Text
-                style={[
-                  styles.tabText,
-                  { color: tab === tb.key ? colors.primary : colors.mutedForeground },
-                ]}
-              >
+              <Text style={[styles.tabText, { color: tab === tb.key ? colors.primary : colors.mutedForeground }]}>
                 {tb.label}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <View style={styles.infoSection}>
+        {/* ── Course info ── */}
+        <View style={[styles.infoSection, { flexDirection: isRTL ? "column" : "column" }]}>
           <Text style={[styles.courseTitle, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
             {course.title}
           </Text>
+
           {course.teacherName ? (
             <View style={[styles.teacherRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
               <Feather name="user" size={14} color={colors.mutedForeground} />
@@ -137,46 +132,62 @@ export default function CourseDetailScreen() {
             </View>
           ) : null}
 
-          <View style={[styles.metaRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
-            <View style={[styles.metaChip, { backgroundColor: colors.secondary }]}>
-              <Feather name="play-circle" size={13} color={colors.primary} />
-              <Text style={[styles.metaChipText, { color: colors.primary }]}>
-                {course.lessonsCount ?? 0} {t.courses.lessons}
-              </Text>
-            </View>
-            <View style={[styles.metaChip, { backgroundColor: course.isPurchased ? (colors.success + "20") : (colors.primary + "15") }]}>
-              {course.isPurchased ? (
-                <Feather name="check-circle" size={13} color={colors.success} />
-              ) : (
-                <Feather name="lock" size={13} color={colors.primary} />
-              )}
-              <Text style={[styles.metaChipText, { color: course.isPurchased ? colors.success : colors.primary }]}>
-                {course.isPurchased ? t.courses.enter : (course.price ? `${course.price} ج` : t.courses.free)}
-              </Text>
-            </View>
+          {/* Stats chips */}
+          <View style={[styles.statsRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+            {videoCount > 0 && (
+              <StatChip icon="play-circle" value={videoCount} label={isRTL ? "فيديو" : "Videos"} color="#6c63ff" bg="#6c63ff20" />
+            )}
+            {pdfCount > 0 && (
+              <StatChip icon="file-text" value={pdfCount} label="PDF" color="#e74c3c" bg="#e74c3c20" />
+            )}
+            {quizCount > 0 && (
+              <StatChip icon="help-circle" value={quizCount} label={isRTL ? "اختبار" : "Quiz"} color="#f39c12" bg="#f39c1220" />
+            )}
+            {articleCount > 0 && (
+              <StatChip icon="book-open" value={articleCount} label={isRTL ? "مقال" : "Article"} color="#27ae60" bg="#27ae6020" />
+            )}
+          </View>
+
+          {/* Purchase badge */}
+          <View style={[styles.purchaseBadge, {
+            backgroundColor: course.isPurchased ? (colors.success + "20") : (colors.primary + "15"),
+            alignSelf: isRTL ? "flex-end" : "flex-start",
+          }]}>
+            <Feather
+              name={course.isPurchased ? "check-circle" : "lock"}
+              size={14}
+              color={course.isPurchased ? colors.success : colors.primary}
+            />
+            <Text style={[styles.purchaseBadgeText, { color: course.isPurchased ? colors.success : colors.primary }]}>
+              {course.isPurchased
+                ? (isRTL ? "تم الاشتراك" : "Enrolled")
+                : course.price
+                ? `${course.price} ج`
+                : (isRTL ? "مجاني" : "Free")}
+            </Text>
           </View>
         </View>
 
-        {tab === "lessons" && (
+        {/* ── Content tab: lesson list ── */}
+        {tab === "content" && (
           <View style={styles.contentSection}>
             {lessonsLoading ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : (lessons?.length ?? 0) === 0 ? (
+              <ActivityIndicator color={colors.primary} style={{ marginTop: 32 }} />
+            ) : !lessons?.length ? (
               <View style={styles.emptyState}>
+                <Feather name="inbox" size={40} color={colors.mutedForeground} />
                 <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                  {t.courseDetail.noLessons}
+                  {isRTL ? "لا توجد دروس بعد" : "No lessons yet"}
                 </Text>
               </View>
             ) : (
-              lessons?.map((lesson: Lesson, idx: number) => (
+              lessons.map((lesson, idx) => (
                 <LessonRow
                   key={lesson.id}
                   lesson={lesson}
                   idx={idx}
                   isPurchased={!!course.isPurchased}
-                  courseId={id!}
                   colors={colors}
-                  t={t}
                   isRTL={isRTL}
                 />
               ))
@@ -184,35 +195,11 @@ export default function CourseDetailScreen() {
           </View>
         )}
 
-        {tab === "exams" && (
-          <View style={styles.contentSection}>
-            {examsLoading ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : (exams?.length ?? 0) === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                  {t.courseDetail.noExams}
-                </Text>
-              </View>
-            ) : (
-              exams?.map((exam: Exam) => (
-                <ExamRow
-                  key={exam.id}
-                  exam={exam}
-                  isPurchased={!!course.isPurchased}
-                  colors={colors}
-                  t={t}
-                  isRTL={isRTL}
-                />
-              ))
-            )}
-          </View>
-        )}
-
+        {/* ── About tab ── */}
         {tab === "about" && (
           <View style={[styles.contentSection, { paddingBottom: insets.bottom + 120 }]}>
             <Text style={[styles.description, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
-              {course.description ?? ""}
+              {course.description || (isRTL ? "لا يوجد وصف للكورس" : "No description available.")}
             </Text>
           </View>
         )}
@@ -220,23 +207,21 @@ export default function CourseDetailScreen() {
         <View style={{ height: insets.bottom + 100 }} />
       </ScrollView>
 
-      <View
-        style={[
-          styles.actionBar,
-          { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom + 12 },
-        ]}
-      >
-        <TouchableOpacity
-          style={[styles.actionBtn, { backgroundColor: colors.primary }]}
-          onPress={handleEnter}
-          activeOpacity={0.85}
-        >
-          <Feather name={course.isPurchased ? "play" : "key"} size={18} color="#fff" />
-          <Text style={styles.actionBtnText}>
-            {course.isPurchased ? t.courses.enter : t.courses.buy}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* ── Bottom action bar (only for non-purchased) ── */}
+      {!course.isPurchased && (
+        <View style={[styles.actionBar, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom + 12 }]}>
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: colors.primary }]}
+            onPress={() => setShowCodeModal(true)}
+            activeOpacity={0.85}
+          >
+            <Feather name="key" size={18} color="#fff" />
+            <Text style={styles.actionBtnText}>
+              {isRTL ? "أدخل كود الاشتراك" : "Enter Access Code"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <AccessCodeModal
         visible={showCodeModal}
@@ -248,28 +233,84 @@ export default function CourseDetailScreen() {
   );
 }
 
+// ─── Stat chip ────────────────────────────────────────────────────────────────
+function StatChip({
+  icon,
+  value,
+  label,
+  color,
+  bg,
+}: {
+  icon: React.ComponentProps<typeof Feather>["name"];
+  value: number;
+  label: string;
+  color: string;
+  bg: string;
+}) {
+  return (
+    <View style={[styles.statChip, { backgroundColor: bg }]}>
+      <Feather name={icon} size={12} color={color} />
+      <Text style={[styles.statChipText, { color }]}>
+        {value} {label}
+      </Text>
+    </View>
+  );
+}
+
+// ─── Lesson row ───────────────────────────────────────────────────────────────
 function LessonRow({
   lesson,
   idx,
   isPurchased,
-  courseId,
   colors,
-  t,
   isRTL,
 }: {
   lesson: Lesson;
   idx: number;
   isPurchased: boolean;
-  courseId: string;
   colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
-  t: ReturnType<typeof import("@/context/LanguageContext").useLanguage>["t"];
   isRTL: boolean;
 }) {
-  const locked = !isPurchased && lesson.isLocked !== false;
+  const locked = !isPurchased;
+
+  const typeConfig = getLessonTypeConfig(lesson.type, colors);
 
   function handlePress() {
-    if (!locked) {
-      router.push({ pathname: "/player/[id]", params: { id: lesson.id } });
+    if (locked) return;
+
+    switch (lesson.type) {
+      case LESSON_TYPE.Video:
+        router.push({
+          pathname: "/player/[id]",
+          params: { id: lesson.id, videoUrl: lesson.videoUrl ?? "" },
+        });
+        break;
+
+      case LESSON_TYPE.Pdf:
+        if (lesson.videoUrl) {
+          Linking.openURL(lesson.videoUrl);
+        }
+        break;
+
+      case LESSON_TYPE.Quiz:
+        if (lesson.examId) {
+          router.push({ pathname: "/exam/[id]", params: { id: lesson.examId } });
+        }
+        break;
+
+      case LESSON_TYPE.Article:
+        if (lesson.videoUrl) {
+          Linking.openURL(lesson.videoUrl);
+        }
+        break;
+
+      default:
+        if (lesson.videoUrl) {
+          router.push({
+            pathname: "/player/[id]",
+            params: { id: lesson.id, videoUrl: lesson.videoUrl },
+          });
+        }
     }
   }
 
@@ -277,82 +318,90 @@ function LessonRow({
     <TouchableOpacity
       style={[
         styles.lessonRow,
-        { borderColor: colors.border, backgroundColor: colors.card, flexDirection: isRTL ? "row-reverse" : "row" },
+        {
+          borderColor: locked ? colors.border : typeConfig.borderColor,
+          backgroundColor: colors.card,
+          flexDirection: isRTL ? "row-reverse" : "row",
+          opacity: locked ? 0.6 : 1,
+        },
       ]}
       onPress={handlePress}
       disabled={locked}
-      activeOpacity={locked ? 1 : 0.85}
+      activeOpacity={locked ? 1 : 0.8}
     >
-      <View style={[styles.lessonNum, { backgroundColor: locked ? colors.muted : (colors.primary + "20") }]}>
-        <Text style={[styles.lessonNumText, { color: locked ? colors.mutedForeground : colors.primary }]}>
-          {idx + 1}
-        </Text>
+      {/* Index / type icon */}
+      <View style={[styles.lessonIcon, { backgroundColor: locked ? colors.muted : typeConfig.bg }]}>
+        <Feather
+          name={locked ? "lock" : typeConfig.icon}
+          size={16}
+          color={locked ? colors.mutedForeground : typeConfig.color}
+        />
       </View>
-      <Text
-        style={[styles.lessonTitle, { color: locked ? colors.mutedForeground : colors.foreground, flex: 1, textAlign: isRTL ? "right" : "left" }]}
-        numberOfLines={2}
-      >
-        {lesson.title}
-      </Text>
-      <Feather
-        name={locked ? "lock" : "play-circle"}
-        size={18}
-        color={locked ? colors.mutedForeground : colors.primary}
-      />
-    </TouchableOpacity>
-  );
-}
 
-function ExamRow({
-  exam,
-  isPurchased,
-  colors,
-  t,
-  isRTL,
-}: {
-  exam: Exam;
-  isPurchased: boolean;
-  colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
-  t: ReturnType<typeof import("@/context/LanguageContext").useLanguage>["t"];
-  isRTL: boolean;
-}) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.lessonRow,
-        { borderColor: colors.border, backgroundColor: colors.card, flexDirection: isRTL ? "row-reverse" : "row" },
-      ]}
-      onPress={() => {
-        if (isPurchased) {
-          router.push({ pathname: "/exam/[id]", params: { id: exam.id } });
-        }
-      }}
-      disabled={!isPurchased}
-      activeOpacity={isPurchased ? 0.85 : 1}
-    >
-      <View style={[styles.lessonNum, { backgroundColor: exam.isCompleted ? (colors.success + "20") : (colors.primary + "20") }]}>
-        <Feather name="file-text" size={16} color={exam.isCompleted ? colors.success : colors.primary} />
-      </View>
-      <Text
-        style={[styles.lessonTitle, { color: isPurchased ? colors.foreground : colors.mutedForeground, flex: 1, textAlign: isRTL ? "right" : "left" }]}
-        numberOfLines={2}
-      >
-        {exam.title}
-      </Text>
-      {exam.isCompleted && exam.score !== undefined ? (
-        <View style={[styles.scoreBadge, { backgroundColor: colors.success + "20" }]}>
-          <Text style={[styles.scoreText, { color: colors.success }]}>{exam.score}%</Text>
+      {/* Title + type badge */}
+      <View style={[styles.lessonMeta, { alignItems: isRTL ? "flex-end" : "flex-start" }]}>
+        <Text
+          style={[styles.lessonTitle, { color: locked ? colors.mutedForeground : colors.foreground, textAlign: isRTL ? "right" : "left" }]}
+          numberOfLines={2}
+        >
+          {lesson.title}
+        </Text>
+        <View style={[styles.typeBadge, { backgroundColor: locked ? colors.muted : typeConfig.bg }]}>
+          <Text style={[styles.typeBadgeText, { color: locked ? colors.mutedForeground : typeConfig.color }]}>
+            {typeConfig.label}
+          </Text>
+          {lesson.duration ? (
+            <Text style={[styles.typeBadgeText, { color: locked ? colors.mutedForeground : typeConfig.color }]}>
+              {" · "}{formatDuration(lesson.duration)}
+            </Text>
+          ) : null}
         </View>
-      ) : (
-        <Feather name={isPurchased ? "chevron-right" : "lock"} size={18} color={colors.mutedForeground} />
+      </View>
+
+      {/* Right chevron */}
+      {!locked && (
+        <Feather
+          name={isRTL ? "chevron-left" : "chevron-right"}
+          size={18}
+          color={typeConfig.color}
+          style={{ marginStart: 4 }}
+        />
       )}
     </TouchableOpacity>
   );
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function getLessonTypeConfig(
+  type: number | undefined,
+  colors: ReturnType<typeof import("@/hooks/useColors").useColors>,
+) {
+  switch (type) {
+    case LESSON_TYPE.Video:
+      return { icon: "play-circle" as const, color: "#6c63ff", bg: "#6c63ff20", borderColor: "#6c63ff40", label: "فيديو" };
+    case LESSON_TYPE.Pdf:
+      return { icon: "file-text" as const, color: "#e74c3c", bg: "#e74c3c20", borderColor: "#e74c3c40", label: "PDF" };
+    case LESSON_TYPE.Quiz:
+      return { icon: "help-circle" as const, color: "#f39c12", bg: "#f39c1220", borderColor: "#f39c1240", label: "اختبار" };
+    case LESSON_TYPE.Article:
+      return { icon: "book-open" as const, color: "#27ae60", bg: "#27ae6020", borderColor: "#27ae6040", label: "مقال" };
+    default:
+      return { icon: "play-circle" as const, color: colors.primary, bg: colors.primary + "20", borderColor: colors.primary + "40", label: "درس" };
+  }
+}
+
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes}د`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}س ${m}د` : `${h}س`;
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+
   heroContainer: { height: 240, position: "relative" },
   hero: { width: "100%", height: "100%" },
   heroPlaceholder: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
@@ -363,10 +412,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "rgba(0,0,0,0.45)",
     alignItems: "center",
     justifyContent: "center",
   },
+
   tabBar: {
     flexDirection: "row",
     borderBottomWidth: 1,
@@ -381,6 +431,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
+
   infoSection: {
     padding: 20,
     gap: 10,
@@ -397,11 +448,11 @@ const styles = StyleSheet.create({
   teacherName: {
     fontSize: 14,
   },
-  metaRow: {
-    gap: 8,
+  statsRow: {
     flexWrap: "wrap",
+    gap: 8,
   },
-  metaChip: {
+  statChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
@@ -409,58 +460,81 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 20,
   },
-  metaChipText: {
-    fontSize: 13,
+  statChipText: {
+    fontSize: 12,
     fontWeight: "600",
   },
+  purchaseBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: "flex-start",
+  },
+  purchaseBadgeText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
   contentSection: {
     padding: 16,
     gap: 10,
   },
+
   lessonRow: {
     alignItems: "center",
     gap: 12,
     padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 14,
+    borderWidth: 1.5,
   },
-  lessonNum: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+  lessonIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
-  lessonNumText: {
-    fontSize: 14,
-    fontWeight: "700",
+  lessonMeta: {
+    flex: 1,
+    gap: 4,
   },
   lessonTitle: {
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "600",
     lineHeight: 20,
   },
-  scoreBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  scoreText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  emptyState: {
-    paddingTop: 40,
+  typeBadge: {
+    flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+  },
+  typeBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+
+  emptyState: {
+    paddingTop: 48,
+    alignItems: "center",
+    gap: 12,
   },
   emptyText: {
     fontSize: 15,
     textAlign: "center",
   },
+
   description: {
     fontSize: 15,
-    lineHeight: 24,
+    lineHeight: 26,
   },
+
   actionBar: {
     position: "absolute",
     bottom: 0,
