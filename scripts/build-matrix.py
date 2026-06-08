@@ -34,10 +34,7 @@ def main() -> None:
         print(f"::error::API error: {err}", file=sys.stderr)
         sys.exit(1)
 
-    teachers: list[dict] = (
-        data.get("value", {}).get("data", [])
-        or data.get("data", [])
-    )
+    teachers: list[dict] = data.get("value", {}).get("data", []) or data.get("data", [])
 
     if not teachers:
         print("::error::API returned 0 teachers", file=sys.stderr)
@@ -54,7 +51,7 @@ def main() -> None:
         )
 
         # shortCode is already a clean identifier; use it as primary slug source
-        raw_slug = t.get("shortCode") or slugify(full_name)
+        raw_slug = slugify(full_name)
         slug = (raw_slug or t["id"][:8])[:20]
 
         # Guarantee uniqueness across teachers
@@ -69,11 +66,11 @@ def main() -> None:
 
         items.append(
             {
-                "teacher_id":   t["id"],
+                "teacher_id": t["id"],
                 "teacher_name": full_name,
-                "slug":         slug,
-                "icon_url":     icon_url,
-                "package":      package,
+                "slug": slug,
+                "icon_url": icon_url,
+                "package": package,
             }
         )
 
@@ -85,7 +82,10 @@ def main() -> None:
 
     print(f"✅  Matrix built: {len(items)} teacher(s)", file=sys.stderr)
     for item in items:
-        print(f"   • {item['teacher_name']!r:30s}  slug={item['slug']:20s}  pkg={item['package']}", file=sys.stderr)
+        print(
+            f"   • {item['teacher_name']!r:30s}  slug={item['slug']:20s}  pkg={item['package']}",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":
