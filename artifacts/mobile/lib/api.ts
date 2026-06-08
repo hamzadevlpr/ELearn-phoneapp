@@ -59,6 +59,8 @@ interface CourseLessonDto {
   courseLessonTypeName?: string;
   examId?: string;
   isNotShowUntilExamPass?: boolean;
+  quiz?: EducationalQuiz | null;
+  studentExam?: StudentExam | null;
 }
 
 interface CourseWithDetailsDto {
@@ -83,9 +85,65 @@ export interface CourseTopic {
   isNotShowUntilExamPass: boolean;
   totalHours: number;
   totalMinutes: number;
-  quiz: any | null;
-  studentExam: any | null;
+  quiz: EducationalQuiz | null;
+  studentExam: StudentExam | null;
   createdOn?: string;
+}
+
+export interface StudentExam {
+  id: string; // المعرف الفريد لعملية الامتحان (UUID)
+  startTime: string; // وقت بدء الامتحان (ISO 8601 Date String)
+  endTime: string; // وقت انتهاء الامتحان (ISO 8601 Date String)
+  degree: number; // الدرجة الفعلية التي حصل عليها الطالب
+  totalDegree: number; // الدرجة الكلية للاختبار
+  studentId: string; // المعرف الفريد للطالب
+  studentName: string; // اسم الطالب
+  quizId: string; // المعرف الفريد للاختبار (Quiz)
+  quizTitle: string; // عنوان الاختبار
+  degreePercent: number; // النسبة المئوية لدرجة الطالب (مثلاً: 85 لتمثيل 85%)
+}
+
+export interface QuizChoice {
+  key: number;
+  value: string;
+}
+
+// واجهة تمثل الخيارات المشفرة كـ String JSON (كما هو وارد في قاعدة البيانات)
+export interface QuizChoiceRaw {
+  Key: number;
+  Value: string;
+}
+
+// واجهة تمثل هيكل السؤال الواحد بالكامل
+export interface QuizQuestion {
+  id: string; // معرف فريد للسؤال (UUID)
+  title: string; // نص السؤال
+  img: string | null; // رابط الصورة في حال وجودها
+  hint: string | null; // تلميح لمساعدة الطالب
+  quizId: string; // المعرف الفريد للاختبار التابع له
+  choicesJson: string; // الخيارات مخزنة كـ الكود النصي المرمز JSON String
+  answersJson: string; // الإجابات الصحيحة مخزنة كـ JSON String (على هيئة مصفوفة أرقام)
+  choices: QuizChoice[]; // مصفوفة الكائنات المفرودة للخيارات بعد عمل Parsing
+  answers: number[]; // مصفوفة المفاتيح (Keys) للإجابات الصحيحة
+  difficulty: number; // مستوى الصعوبة الرقمي
+  questionType: "single-select" | "multi-select" | string; // نوع السؤال (اختيار مفرد أو متعدد)
+}
+
+// الواجهة الرئيسية للاختبار بالكامل
+export interface EducationalQuiz {
+  id: string; // المعرف الفريد للاختبار
+  title: string; // عنوان الاختبار (مثل: 3ع الاسبوع 8)
+  studentGrade: number; // الرقم الكودي للصف الدراسي
+  studentGradeName: string; // اسم الصف الدراسي (مثل: الصف الثالث الاعدادى)
+  materialStudy: number; // الرقم الكودي للمادة التعليمية
+  materialStudyName: string; // اسم المادة التعليمية (مثل: الدراسات الاجتماعيه)
+  maxTimeInMinutes: number; // الوقت الأقصى المتاح لحل الاختبار بالدقائق
+  difficulty: number; // مستوى الصعوبة العام للاختبار
+  difficultyName: string | null; // اسم مستوى الصعوبة إن وجد
+  totalQuestions: number; // إجمالي عدد الأسئلة
+  fullName: string; // الاسم الكامل المدمج للاختبار
+  createdOn: string | null; // تاريخ الإنشاء
+  questions: QuizQuestion[]; // مصفوفة الأسئلة التابعة للاختبار
 }
 
 // ─── App-level types (used by all screens) ───────────────────────────────────
@@ -156,25 +214,9 @@ export interface Lesson {
   type?: number;
   typeName?: string;
   examId?: string;
-}
-
-export interface ExamQuestion {
-  id: string;
-  text: string;
-  options: string[];
-  imageUrl?: string;
-}
-
-export interface Exam {
-  id: string;
-  title: string;
-  questionsCount?: number;
-  durationMinutes?: number;
-  isCompleted?: boolean;
-  score?: number;
-  passingScore?: number;
-  courseId?: string;
-  questions?: ExamQuestion[];
+  isNotShowUntilExamPass?: boolean;
+  quiz?: EducationalQuiz | null;
+  studentExam?: StudentExam | null;
 }
 
 export interface ExamResult {
@@ -257,6 +299,9 @@ function mapLesson(dto: CourseLessonDto): Lesson {
     type: dto.courseLessonType,
     typeName: dto.courseLessonTypeName,
     examId: dto.examId,
+    isNotShowUntilExamPass: dto.isNotShowUntilExamPass,
+    quiz: dto.quiz,
+    studentExam: dto.studentExam,
   };
 }
 
@@ -445,7 +490,9 @@ export const api = {
           "GET",
           `/student-ui/courses/suggested/${materialStudy}`,
         );
-        return (Array.isArray(result) ? result : []).map((dto) => mapCourse(dto));
+        return (Array.isArray(result) ? result : []).map((dto) =>
+          mapCourse(dto),
+        );
       } catch {
         return [];
       }
@@ -474,6 +521,19 @@ export const api = {
       examId: string,
       answers: { questionId: string; selectedIndex: number }[],
     ) => request<ExamResult>("POST", `/Exam/${examId}/Submit`, { answers }),
+  },
+
+  quizzes: {
+    // POST /student-ui/quiz-submissions — submit inline quiz answers
+    submit: (
+      quizId: string,
+      answers: { questionId: string; selectedKey: number }[],
+    ) =>
+      request<StudentExam>(
+        "POST",
+        "/student-ui/quiz-submissions",
+        { quizId, answers },
+      ),
   },
 
   student: {

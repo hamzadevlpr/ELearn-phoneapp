@@ -1,12 +1,14 @@
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
-import React, { useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,43 +19,51 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLanguage } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
-import { api, Lesson } from "@/lib/api";
+import {
+  api,
+  type EducationalQuiz,
+  type Lesson,
+  type QuizQuestion,
+  type StudentExam,
+} from "@/lib/api";
 
 const LESSON_TYPE = { Video: 0, Pdf: 1, Quiz: 2, Article: 3 } as const;
 
+// ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function LessonsScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { isRTL } = useLanguage();
-  const { id, title, image } = useLocalSearchParams<{
-    id: string;
-    title?: string;
-    image?: string;
-  }>();
+  const { id, title } = useLocalSearchParams<{ id: string; title?: string }>();
 
   const [search, setSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState<number | null>(null);
+  const [activeQuizLesson, setActiveQuizLesson] = useState<Lesson | null>(null);
 
-  const { data: lessons, isLoading, error, refetch } = useQuery({
+  const {
+    data: lessons,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["lessons", id],
     queryFn: () => api.courses.lessons(id!),
     enabled: !!id,
   });
 
-  const filtered = (lessons ?? []).filter((l) => {
-    const matchSearch = !search || l.title.toLowerCase().includes(search.toLowerCase());
-    const matchFilter = activeFilter === null || l.type === activeFilter;
-    return matchSearch && matchFilter;
-  });
-
-  const typeCounts = {
-    [LESSON_TYPE.Video]: lessons?.filter((l) => l.type === LESSON_TYPE.Video).length ?? 0,
-    [LESSON_TYPE.Pdf]: lessons?.filter((l) => l.type === LESSON_TYPE.Pdf).length ?? 0,
-    [LESSON_TYPE.Quiz]: lessons?.filter((l) => l.type === LESSON_TYPE.Quiz).length ?? 0,
-    [LESSON_TYPE.Article]: lessons?.filter((l) => l.type === LESSON_TYPE.Article).length ?? 0,
-  };
+  const filtered = useMemo(
+    () =>
+      (lessons ?? []).filter((l) =>
+        !search || l.title.toLowerCase().includes(search.toLowerCase()),
+      ),
+    [lessons, search],
+  );
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  const handleDoneQuiz = useCallback(() => {
+    setActiveQuizLesson(null);
+    refetch();
+  }, [refetch]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -76,26 +86,20 @@ export default function LessonsScreen() {
             color={colors.foreground}
           />
         </TouchableOpacity>
-
         <View style={[styles.headerTitle, { alignItems: isRTL ? "flex-end" : "flex-start" }]}>
-          {image ? (
-            <Image source={{ uri: image }} style={styles.headerThumb} contentFit="cover" />
-          ) : (
-            <View style={[styles.headerThumb, { backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center" }]}>
-              <Feather name="book-open" size={18} color={colors.primary} />
-            </View>
-          )}
-          <Text
-            style={[styles.headerText, { color: colors.foreground }]}
-            numberOfLines={1}
-          >
+          <Text style={[styles.headerText, { color: colors.foreground }]} numberOfLines={1}>
             {title ?? (isRTL ? "دروس الكورس" : "Course Lessons")}
           </Text>
         </View>
       </View>
 
-      {/* ── Search bar ── */}
-      <View style={[styles.searchWrap, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      {/* ── Search ── */}
+      <View
+        style={[
+          styles.searchWrap,
+          { backgroundColor: colors.card, borderBottomColor: colors.border },
+        ]}
+      >
         <View
           style={[
             styles.searchRow,
@@ -108,7 +112,10 @@ export default function LessonsScreen() {
         >
           <Feather name="search" size={16} color={colors.mutedForeground} />
           <TextInput
-            style={[styles.searchInput, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}
+            style={[
+              styles.searchInput,
+              { color: colors.foreground, textAlign: isRTL ? "right" : "left" },
+            ]}
             value={search}
             onChangeText={setSearch}
             placeholder={isRTL ? "ابحث عن درس..." : "Search lessons..."}
@@ -121,73 +128,6 @@ export default function LessonsScreen() {
           )}
         </View>
       </View>
-
-      {/* ── Type filter chips ── */}
-      {!isLoading && (lessons?.length ?? 0) > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.filterRow,
-            { flexDirection: isRTL ? "row-reverse" : "row" },
-          ]}
-          style={[styles.filterScroll, { backgroundColor: colors.card, borderBottomColor: colors.border }]}
-        >
-          <FilterChip
-            label={isRTL ? "الكل" : "All"}
-            icon="layers"
-            count={lessons?.length ?? 0}
-            active={activeFilter === null}
-            color={colors.primary}
-            onPress={() => setActiveFilter(null)}
-            colors={colors}
-          />
-          {typeCounts[LESSON_TYPE.Video] > 0 && (
-            <FilterChip
-              label={isRTL ? "فيديو" : "Video"}
-              icon="play-circle"
-              count={typeCounts[LESSON_TYPE.Video]}
-              active={activeFilter === LESSON_TYPE.Video}
-              color="#6c63ff"
-              onPress={() => setActiveFilter(activeFilter === LESSON_TYPE.Video ? null : LESSON_TYPE.Video)}
-              colors={colors}
-            />
-          )}
-          {typeCounts[LESSON_TYPE.Pdf] > 0 && (
-            <FilterChip
-              label="PDF"
-              icon="file-text"
-              count={typeCounts[LESSON_TYPE.Pdf]}
-              active={activeFilter === LESSON_TYPE.Pdf}
-              color="#e74c3c"
-              onPress={() => setActiveFilter(activeFilter === LESSON_TYPE.Pdf ? null : LESSON_TYPE.Pdf)}
-              colors={colors}
-            />
-          )}
-          {typeCounts[LESSON_TYPE.Quiz] > 0 && (
-            <FilterChip
-              label={isRTL ? "اختبار" : "Quiz"}
-              icon="help-circle"
-              count={typeCounts[LESSON_TYPE.Quiz]}
-              active={activeFilter === LESSON_TYPE.Quiz}
-              color="#f39c12"
-              onPress={() => setActiveFilter(activeFilter === LESSON_TYPE.Quiz ? null : LESSON_TYPE.Quiz)}
-              colors={colors}
-            />
-          )}
-          {typeCounts[LESSON_TYPE.Article] > 0 && (
-            <FilterChip
-              label={isRTL ? "مقال" : "Article"}
-              icon="book-open"
-              count={typeCounts[LESSON_TYPE.Article]}
-              active={activeFilter === LESSON_TYPE.Article}
-              color="#27ae60"
-              onPress={() => setActiveFilter(activeFilter === LESSON_TYPE.Article ? null : LESSON_TYPE.Article)}
-              colors={colors}
-            />
-          )}
-        </ScrollView>
-      )}
 
       {/* ── Content ── */}
       {isLoading ? (
@@ -216,8 +156,9 @@ export default function LessonsScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 80 }]}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {filtered.map((lesson, idx) => (
             <LessonRow
@@ -226,70 +167,54 @@ export default function LessonsScreen() {
               idx={idx}
               colors={colors}
               isRTL={isRTL}
+              onQuizOpen={() => setActiveQuizLesson(lesson)}
             />
           ))}
         </ScrollView>
+      )}
+
+      {/* ── Inline Quiz Modal ── */}
+      {activeQuizLesson?.quiz && (
+        <QuizModal
+          quiz={activeQuizLesson.quiz}
+          existingResult={activeQuizLesson.studentExam ?? null}
+          isRTL={isRTL}
+          colors={colors}
+          insets={insets}
+          onDone={handleDoneQuiz}
+        />
       )}
     </View>
   );
 }
 
-// ─── Filter chip ──────────────────────────────────────────────────────────────
-function FilterChip({
-  label,
-  icon,
-  count,
-  active,
-  color,
-  onPress,
-  colors,
-}: {
-  label: string;
-  icon: React.ComponentProps<typeof Feather>["name"];
-  count: number;
-  active: boolean;
-  color: string;
-  onPress: () => void;
-  colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
-}) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.chip,
-        {
-          backgroundColor: active ? color : colors.background,
-          borderColor: active ? color : colors.border,
-        },
-      ]}
-      onPress={onPress}
-      activeOpacity={0.8}
-    >
-      <Feather name={icon} size={13} color={active ? "#fff" : color} />
-      <Text style={[styles.chipText, { color: active ? "#fff" : color }]}>
-        {label}
-      </Text>
-      <View style={[styles.chipBadge, { backgroundColor: active ? "rgba(255,255,255,0.25)" : color + "20" }]}>
-        <Text style={[styles.chipBadgeText, { color: active ? "#fff" : color }]}>{count}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-// ─── Lesson row ───────────────────────────────────────────────────────────────
+// ─── Lesson Row ───────────────────────────────────────────────────────────────
 function LessonRow({
   lesson,
   idx,
   colors,
   isRTL,
+  onQuizOpen,
 }: {
   lesson: Lesson;
   idx: number;
-  colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
+  colors: ReturnType<typeof useColors>;
   isRTL: boolean;
+  onQuizOpen: () => void;
 }) {
+  const isLocked = !!lesson.isNotShowUntilExamPass;
+  const isQuiz = lesson.type === LESSON_TYPE.Quiz;
+  const hasResult = !!lesson.studentExam;
   const cfg = getTypeConfig(lesson.type, colors);
 
   function handlePress() {
+    if (isLocked) return;
+
+    if (isQuiz) {
+      onQuizOpen();
+      return;
+    }
+
     switch (lesson.type) {
       case LESSON_TYPE.Video:
         router.push({
@@ -298,13 +223,6 @@ function LessonRow({
         });
         break;
       case LESSON_TYPE.Pdf:
-        if (lesson.fileUrl ?? lesson.videoUrl)
-          Linking.openURL((lesson.fileUrl ?? lesson.videoUrl)!);
-        break;
-      case LESSON_TYPE.Quiz:
-        if (lesson.examId)
-          router.push({ pathname: "/exam/[id]", params: { id: lesson.examId } });
-        break;
       case LESSON_TYPE.Article:
         if (lesson.fileUrl ?? lesson.videoUrl)
           Linking.openURL((lesson.fileUrl ?? lesson.videoUrl)!);
@@ -323,59 +241,554 @@ function LessonRow({
       style={[
         styles.lessonRow,
         {
-          backgroundColor: colors.card,
-          borderColor: cfg.border,
+          backgroundColor: isLocked ? colors.card + "88" : colors.card,
+          borderColor: isLocked ? colors.border : cfg.border,
           flexDirection: isRTL ? "row-reverse" : "row",
+          opacity: isLocked ? 0.6 : 1,
         },
       ]}
       onPress={handlePress}
-      activeOpacity={0.8}
+      activeOpacity={isLocked ? 1 : 0.8}
     >
-      {/* Order number */}
-      <View style={[styles.orderBadge, { backgroundColor: cfg.bg }]}>
-        <Text style={[styles.orderText, { color: cfg.color }]}>{idx + 1}</Text>
+      {/* Order badge */}
+      <View style={[styles.orderBadge, { backgroundColor: isLocked ? colors.border : cfg.bg }]}>
+        {isLocked ? (
+          <Feather name="lock" size={13} color={colors.mutedForeground} />
+        ) : (
+          <Text style={[styles.orderText, { color: cfg.color }]}>{idx + 1}</Text>
+        )}
       </View>
 
       {/* Type icon */}
-      <View style={[styles.typeIcon, { backgroundColor: cfg.bg }]}>
-        <Feather name={cfg.icon} size={17} color={cfg.color} />
+      <View style={[styles.typeIcon, { backgroundColor: isLocked ? colors.border : cfg.bg }]}>
+        <Feather
+          name={isLocked ? "lock" : cfg.icon}
+          size={17}
+          color={isLocked ? colors.mutedForeground : cfg.color}
+        />
       </View>
 
       {/* Info */}
       <View style={[styles.lessonInfo, { alignItems: isRTL ? "flex-end" : "flex-start" }]}>
         <Text
-          style={[styles.lessonTitle, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}
+          style={[
+            styles.lessonTitle,
+            {
+              color: isLocked ? colors.mutedForeground : colors.foreground,
+              textAlign: isRTL ? "right" : "left",
+            },
+          ]}
           numberOfLines={2}
         >
           {lesson.title}
         </Text>
+
         <View style={[styles.lessonMeta, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
-          <View style={[styles.typePill, { backgroundColor: cfg.bg }]}>
-            <Text style={[styles.typePillText, { color: cfg.color }]}>{cfg.label}</Text>
-          </View>
-          {lesson.duration ? (
-            <Text style={[styles.duration, { color: colors.mutedForeground }]}>
-              {formatDuration(lesson.duration)}
+          {isLocked ? (
+            <View style={[styles.typePill, { backgroundColor: colors.border }]}>
+              <Text style={[styles.typePillText, { color: colors.mutedForeground }]}>
+                {isRTL ? "مقفل" : "Locked"}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View style={[styles.typePill, { backgroundColor: cfg.bg }]}>
+                <Text style={[styles.typePillText, { color: cfg.color }]}>{cfg.label}</Text>
+              </View>
+              {lesson.duration ? (
+                <Text style={[styles.duration, { color: colors.mutedForeground }]}>
+                  {formatDuration(lesson.duration)}
+                </Text>
+              ) : null}
+              {isQuiz && hasResult && lesson.studentExam && (
+                <ScoreBadge exam={lesson.studentExam} />
+              )}
+            </>
+          )}
+        </View>
+
+        {isLocked && (
+          <Text style={[styles.lockedHint, { color: colors.mutedForeground }]}>
+            {isRTL ? "أكمل الاختبار لإلغاء القفل" : "Complete the quiz to unlock"}
+          </Text>
+        )}
+      </View>
+
+      {/* Right action */}
+      {!isLocked && (
+        <Feather
+          name={isQuiz ? (hasResult ? "award" : "play-circle") : isRTL ? "chevron-left" : "chevron-right"}
+          size={18}
+          color={cfg.color}
+          style={{ flexShrink: 0 }}
+        />
+      )}
+    </TouchableOpacity>
+  );
+}
+
+// ─── Score Badge (inline result chip) ────────────────────────────────────────
+function ScoreBadge({ exam }: { exam: StudentExam }) {
+  const pct = Math.round(exam.degreePercent);
+  const passed = pct >= 50;
+  const bg = passed ? "#27ae6020" : "#e74c3c20";
+  const color = passed ? "#27ae60" : "#e74c3c";
+  return (
+    <View style={[styles.scoreBadge, { backgroundColor: bg }]}>
+      <Feather name={passed ? "check-circle" : "x-circle"} size={11} color={color} />
+      <Text style={[styles.scoreBadgeText, { color }]}>{pct}%</Text>
+    </View>
+  );
+}
+
+// ─── Quiz Modal ───────────────────────────────────────────────────────────────
+type QuizPhase = "result" | "taking";
+
+function QuizModal({
+  quiz,
+  existingResult,
+  isRTL,
+  colors,
+  insets,
+  onDone,
+}: {
+  quiz: EducationalQuiz;
+  existingResult: StudentExam | null;
+  isRTL: boolean;
+  colors: ReturnType<typeof useColors>;
+  insets: ReturnType<typeof import("react-native-safe-area-context").useSafeAreaInsets>;
+  onDone: () => void;
+}) {
+  const initialPhase: QuizPhase = existingResult ? "result" : "taking";
+  const [phase, setPhase] = useState<QuizPhase>(initialPhase);
+  const [selectedKeys, setSelectedKeys] = useState<Record<string, number[]>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [localResult, setLocalResult] = useState<{
+    correct: number;
+    total: number;
+    pct: number;
+  } | null>(null);
+
+  const allAnswered = quiz.questions.every((q) => (selectedKeys[q.id]?.length ?? 0) > 0);
+
+  function toggleKey(questionId: string, key: number, isMulti: boolean) {
+    setSelectedKeys((prev) => {
+      const current = prev[questionId] ?? [];
+      if (isMulti) {
+        return {
+          ...prev,
+          [questionId]: current.includes(key) ? current.filter((k) => k !== key) : [...current, key],
+        };
+      }
+      return { ...prev, [questionId]: [key] };
+    });
+  }
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    const correct = quiz.questions.filter((q) => {
+      const sel = [...(selectedKeys[q.id] ?? [])].sort((a, b) => a - b);
+      const ans = [...q.answers].sort((a, b) => a - b);
+      return sel.length === ans.length && sel.every((v, i) => v === ans[i]);
+    }).length;
+    const total = quiz.questions.length;
+    const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+    setLocalResult({ correct, total, pct });
+
+    const answers = quiz.questions.map((q) => ({
+      questionId: q.id,
+      selectedKey: selectedKeys[q.id]?.[0] ?? 0,
+    }));
+    try {
+      await api.quizzes.submit(quiz.id, answers);
+    } catch {
+      // submission is best-effort; local result is still shown
+    }
+    setSubmitting(false);
+    setPhase("result");
+  }
+
+  const displayResult = localResult
+    ? localResult
+    : existingResult
+    ? {
+        correct: Math.round((existingResult.degreePercent / 100) * existingResult.totalDegree),
+        total: existingResult.totalDegree,
+        pct: Math.round(existingResult.degreePercent),
+      }
+    : null;
+
+  return (
+    <Modal visible animationType="slide" statusBarTranslucent>
+      <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+        {/* Modal header */}
+        <View
+          style={[
+            styles.modalHeader,
+            {
+              paddingTop: (Platform.OS === "web" ? 67 : insets.top) + 8,
+              backgroundColor: colors.card,
+              borderBottomColor: colors.border,
+              flexDirection: isRTL ? "row-reverse" : "row",
+            },
+          ]}
+        >
+          <TouchableOpacity style={styles.backBtn} onPress={onDone}>
+            <Feather name="x" size={22} color={colors.foreground} />
+          </TouchableOpacity>
+          <View style={[styles.headerTitle, { alignItems: isRTL ? "flex-end" : "flex-start" }]}>
+            <Text style={[styles.headerText, { color: colors.foreground }]} numberOfLines={1}>
+              {quiz.title}
             </Text>
-          ) : null}
+            <Text style={[styles.quizMeta, { color: colors.mutedForeground }]}>
+              {quiz.questions.length} {isRTL ? "سؤال" : "questions"}
+              {quiz.maxTimeInMinutes > 0
+                ? ` • ${quiz.maxTimeInMinutes} ${isRTL ? "دقيقة" : "min"}`
+                : ""}
+            </Text>
+          </View>
+        </View>
+
+        {phase === "taking" ? (
+          <>
+            <ScrollView
+              contentContainerStyle={[
+                styles.quizList,
+                { paddingBottom: insets.bottom + 100 },
+              ]}
+              showsVerticalScrollIndicator={false}
+            >
+              {quiz.questions.map((q, qi) => (
+                <QuestionCard
+                  key={q.id}
+                  question={q}
+                  index={qi}
+                  selected={selectedKeys[q.id] ?? []}
+                  isRTL={isRTL}
+                  colors={colors}
+                  onToggle={(key) =>
+                    toggleKey(q.id, key, q.questionType === "multi-select")
+                  }
+                />
+              ))}
+            </ScrollView>
+
+            <View
+              style={[
+                styles.submitBar,
+                {
+                  paddingBottom: insets.bottom + 16,
+                  backgroundColor: colors.card,
+                  borderTopColor: colors.border,
+                },
+              ]}
+            >
+              {!allAnswered && (
+                <Text style={[styles.submitHint, { color: colors.mutedForeground }]}>
+                  {isRTL ? "أجب على جميع الأسئلة أولاً" : "Answer all questions to submit"}
+                </Text>
+              )}
+              <TouchableOpacity
+                style={[
+                  styles.submitBtn,
+                  {
+                    backgroundColor: allAnswered ? colors.primary : colors.border,
+                  },
+                ]}
+                onPress={handleSubmit}
+                disabled={!allAnswered || submitting}
+                activeOpacity={0.85}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.submitBtnText}>
+                    {isRTL ? "تسليم الاختبار" : "Submit Quiz"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          /* Result Phase */
+          <ScrollView
+            contentContainerStyle={[
+              styles.resultContainer,
+              { paddingBottom: insets.bottom + 40 },
+            ]}
+          >
+            {displayResult && (
+              <ResultView
+                result={displayResult}
+                existingExam={existingResult}
+                isRTL={isRTL}
+                colors={colors}
+                onClose={onDone}
+                onRetake={() => {
+                  setSelectedKeys({});
+                  setLocalResult(null);
+                  setPhase("taking");
+                }}
+                showRetake={!existingResult}
+              />
+            )}
+          </ScrollView>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Question Card ────────────────────────────────────────────────────────────
+function QuestionCard({
+  question,
+  index,
+  selected,
+  isRTL,
+  colors,
+  onToggle,
+}: {
+  question: QuizQuestion;
+  index: number;
+  selected: number[];
+  isRTL: boolean;
+  colors: ReturnType<typeof useColors>;
+  onToggle: (key: number) => void;
+}) {
+  const isMulti = question.questionType === "multi-select";
+
+  return (
+    <View
+      style={[
+        styles.questionCard,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+    >
+      {/* Question header */}
+      <View style={[styles.questionHeader, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+        <View style={[styles.questionBadge, { backgroundColor: colors.primary + "20" }]}>
+          <Text style={[styles.questionBadgeText, { color: colors.primary }]}>
+            {index + 1}
+          </Text>
+        </View>
+        {isMulti && (
+          <View style={[styles.multiChip, { backgroundColor: "#6c63ff20" }]}>
+            <Text style={[styles.multiChipText, { color: "#6c63ff" }]}>
+              {isRTL ? "اختيار متعدد" : "Multi-select"}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Question text */}
+      <Text
+        style={[
+          styles.questionTitle,
+          {
+            color: colors.foreground,
+            textAlign: isRTL ? "right" : "left",
+          },
+        ]}
+      >
+        {question.title}
+      </Text>
+
+      {/* Question image */}
+      {question.img && (
+        <Image
+          source={{ uri: question.img }}
+          style={styles.questionImg}
+          contentFit="contain"
+        />
+      )}
+
+      {/* Choices */}
+      <View style={{ gap: 8 }}>
+        {question.choices.map((choice) => {
+          const isSelected = selected.includes(choice.key);
+          return (
+            <Pressable
+              key={choice.key}
+              style={[
+                styles.choiceBtn,
+                {
+                  backgroundColor: isSelected ? colors.primary + "18" : colors.background,
+                  borderColor: isSelected ? colors.primary : colors.border,
+                  flexDirection: isRTL ? "row-reverse" : "row",
+                },
+              ]}
+              onPress={() => onToggle(choice.key)}
+            >
+              <View
+                style={[
+                  styles.choiceCircle,
+                  {
+                    borderColor: isSelected ? colors.primary : colors.border,
+                    backgroundColor: isSelected ? colors.primary : "transparent",
+                  },
+                  isMulti && styles.choiceSquare,
+                ]}
+              >
+                {isSelected && <Feather name="check" size={11} color="#fff" />}
+              </View>
+              <Text
+                style={[
+                  styles.choiceText,
+                  {
+                    color: isSelected ? colors.primary : colors.foreground,
+                    textAlign: isRTL ? "right" : "left",
+                  },
+                ]}
+              >
+                {choice.value}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Hint */}
+      {question.hint && (
+        <View style={[styles.hintRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+          <Feather name="info" size={13} color={colors.mutedForeground} />
+          <Text
+            style={[
+              styles.hintText,
+              { color: colors.mutedForeground, textAlign: isRTL ? "right" : "left" },
+            ]}
+          >
+            {question.hint}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Result View ──────────────────────────────────────────────────────────────
+function ResultView({
+  result,
+  existingExam,
+  isRTL,
+  colors,
+  onClose,
+  onRetake,
+  showRetake,
+}: {
+  result: { correct: number; total: number; pct: number };
+  existingExam: StudentExam | null;
+  isRTL: boolean;
+  colors: ReturnType<typeof useColors>;
+  onClose: () => void;
+  onRetake: () => void;
+  showRetake: boolean;
+}) {
+  const passed = result.pct >= 50;
+  const ringColor = passed ? "#27ae60" : "#e74c3c";
+
+  return (
+    <View style={styles.resultInner}>
+      {/* Score ring */}
+      <View style={[styles.scoreRing, { borderColor: ringColor + "40" }]}>
+        <View style={[styles.scoreRingInner, { backgroundColor: ringColor + "15" }]}>
+          <Feather name={passed ? "award" : "x-circle"} size={36} color={ringColor} />
+          <Text style={[styles.scorePct, { color: ringColor }]}>{result.pct}%</Text>
+          <Text style={[styles.scoreLabel, { color: colors.mutedForeground }]}>
+            {passed ? (isRTL ? "ناجح ✓" : "Passed ✓") : isRTL ? "راسب ✗" : "Failed ✗"}
+          </Text>
         </View>
       </View>
 
-      {/* Action arrow */}
-      <Feather
-        name={isRTL ? "chevron-left" : "chevron-right"}
-        size={18}
-        color={cfg.color}
-        style={{ flexShrink: 0 }}
-      />
-    </TouchableOpacity>
+      {/* Detailed stats */}
+      <View style={[styles.statsRow, { borderColor: colors.border }]}>
+        <StatItem
+          icon="check-circle"
+          color="#27ae60"
+          label={isRTL ? "صحيح" : "Correct"}
+          value={`${result.correct}`}
+          colors={colors}
+        />
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <StatItem
+          icon="x-circle"
+          color="#e74c3c"
+          label={isRTL ? "خطأ" : "Wrong"}
+          value={`${result.total - result.correct}`}
+          colors={colors}
+        />
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <StatItem
+          icon="layers"
+          color={colors.primary}
+          label={isRTL ? "الكل" : "Total"}
+          value={`${result.total}`}
+          colors={colors}
+        />
+      </View>
+
+      {existingExam && (
+        <View
+          style={[styles.examInfoCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          <Text style={[styles.examInfoTitle, { color: colors.foreground }]}>
+            {existingExam.quizTitle}
+          </Text>
+          <Text style={[styles.examInfoSub, { color: colors.mutedForeground }]}>
+            {isRTL ? "الدرجة" : "Score"}: {existingExam.degree} / {existingExam.totalDegree}
+          </Text>
+        </View>
+      )}
+
+      <View style={{ gap: 12, width: "100%" }}>
+        <TouchableOpacity
+          style={[styles.doneBtn, { backgroundColor: colors.primary }]}
+          onPress={onClose}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.doneBtnText}>{isRTL ? "إغلاق وتحديث الدروس" : "Close & Refresh"}</Text>
+        </TouchableOpacity>
+        {showRetake && (
+          <TouchableOpacity
+            style={[styles.retakeBtn, { borderColor: colors.border }]}
+            onPress={onRetake}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.retakeBtnText, { color: colors.foreground }]}>
+              {isRTL ? "إعادة الاختبار" : "Retake Quiz"}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function StatItem({
+  icon,
+  color,
+  label,
+  value,
+  colors,
+}: {
+  icon: React.ComponentProps<typeof Feather>["name"];
+  color: string;
+  label: string;
+  value: string;
+  colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <View style={styles.statItem}>
+      <Feather name={icon} size={20} color={color} />
+      <Text style={[styles.statValue, { color: colors.foreground }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{label}</Text>
+    </View>
   );
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function getTypeConfig(
   type: number | undefined,
-  colors: ReturnType<typeof import("@/hooks/useColors").useColors>,
+  colors: ReturnType<typeof useColors>,
 ) {
   switch (type) {
     case LESSON_TYPE.Video:
@@ -418,29 +831,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
-  headerTitle: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  headerThumb: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    flexShrink: 0,
-  },
-  headerText: {
-    fontSize: 16,
-    fontWeight: "700",
-    flex: 1,
-  },
+  headerTitle: { flex: 1 },
+  headerText: { fontSize: 16, fontWeight: "700", flex: 1 },
+  quizMeta: { fontSize: 12, marginTop: 2 },
 
-  searchWrap: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
+  searchWrap: { paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -450,48 +845,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     paddingHorizontal: 14,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    height: "100%",
-  },
+  searchInput: { flex: 1, fontSize: 14, height: "100%" },
 
-  filterScroll: { borderBottomWidth: 1 },
-  filterRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1.5,
-  },
-  chipText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  chipBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 5,
-  },
-  chipBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
+  list: { padding: 16 },
 
-  list: {
-    padding: 16,
-    gap: 10,
-  },
   lessonRow: {
     alignItems: "center",
     gap: 10,
@@ -508,10 +865,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
-  orderText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
+  orderText: { fontSize: 12, fontWeight: "700" },
   typeIcon: {
     width: 38,
     height: 38,
@@ -520,34 +874,165 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
-  lessonInfo: {
-    flex: 1,
-    gap: 6,
-  },
-  lessonTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    lineHeight: 20,
-  },
-  lessonMeta: {
+  lessonInfo: { flex: 1, gap: 6 },
+  lessonTitle: { fontSize: 14, fontWeight: "600", lineHeight: 20 },
+  lessonMeta: { alignItems: "center", gap: 8 },
+  typePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  typePillText: { fontSize: 11, fontWeight: "700" },
+  duration: { fontSize: 12 },
+  lockedHint: { fontSize: 11, marginTop: 2 },
+  scoreBadge: {
+    flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-  },
-  typePill: {
+    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
   },
-  typePillText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  duration: {
-    fontSize: 12,
-  },
+  scoreBadgeText: { fontSize: 11, fontWeight: "700" },
 
   errorText: { fontSize: 15, textAlign: "center" },
   emptyText: { fontSize: 15, textAlign: "center" },
   retryBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
   retryBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+
+  // ── Quiz Modal ──
+  modalContainer: { flex: 1 },
+  modalHeader: {
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+  },
+
+  quizList: { padding: 16, gap: 12 },
+
+  questionCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    gap: 12,
+    marginBottom: 12,
+  },
+  questionHeader: { alignItems: "center", gap: 8 },
+  questionBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  questionBadgeText: { fontSize: 13, fontWeight: "700" },
+  multiChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  multiChipText: { fontSize: 11, fontWeight: "600" },
+  questionTitle: { fontSize: 15, fontWeight: "600", lineHeight: 22 },
+  questionImg: { width: "100%", height: 160, borderRadius: 10 },
+
+  choiceBtn: {
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  choiceCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  choiceSquare: { borderRadius: 5 },
+  choiceText: { flex: 1, fontSize: 14, lineHeight: 20 },
+
+  hintRow: { alignItems: "center", gap: 6, marginTop: 4 },
+  hintText: { flex: 1, fontSize: 12, lineHeight: 18 },
+
+  submitBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    gap: 8,
+    alignItems: "center",
+  },
+  submitHint: { fontSize: 12, textAlign: "center" },
+  submitBtn: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  submitBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+
+  // ── Result ──
+  resultContainer: { padding: 24, alignItems: "center" },
+  resultInner: { width: "100%", alignItems: "center", gap: 24 },
+  scoreRing: {
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    borderWidth: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 16,
+  },
+  scoreRingInner: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  scorePct: { fontSize: 36, fontWeight: "800", lineHeight: 42 },
+  scoreLabel: { fontSize: 14, fontWeight: "600" },
+
+  statsRow: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderRadius: 16,
+    overflow: "hidden",
+    width: "100%",
+  },
+  statItem: { flex: 1, alignItems: "center", padding: 16, gap: 4 },
+  statValue: { fontSize: 22, fontWeight: "800" },
+  statLabel: { fontSize: 12 },
+  statDivider: { width: 1 },
+
+  examInfoCard: {
+    width: "100%",
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 16,
+    gap: 4,
+  },
+  examInfoTitle: { fontSize: 15, fontWeight: "700" },
+  examInfoSub: { fontSize: 13 },
+
+  doneBtn: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  doneBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  retakeBtn: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    borderWidth: 1.5,
+  },
+  retakeBtnText: { fontSize: 16, fontWeight: "600" },
 });
