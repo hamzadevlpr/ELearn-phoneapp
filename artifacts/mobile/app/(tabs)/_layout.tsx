@@ -1,17 +1,28 @@
 import { Feather } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
 import { BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/context/LanguageContext";
+import { api } from "@/lib/api";
 
 export default function TabLayout() {
   const colors = useColors();
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
+
+  // Fetch portal teachers once after login; result cached for 5 min
+  const { data: teachers = [] } = useQuery({
+    queryKey: ["teachers"],
+    queryFn: () => api.teachers.list(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const hasTeachers = teachers.length > 0;
 
   return (
     <Tabs
@@ -39,13 +50,26 @@ export default function TabLayout() {
           ),
       }}
     >
+      {/* Teachers tab — visible only when portal returns > 0 teachers */}
+      <Tabs.Screen
+        name="teachers"
+        options={{
+          href: hasTeachers ? undefined : null,
+          title: isRTL ? "المعلمون" : "Teachers",
+          tabBarIcon: ({ color }) => <Feather name="users" size={22} color={color} />,
+        }}
+      />
+
+      {/* Courses tab — visible only when there are NO portal teachers */}
       <Tabs.Screen
         name="index"
         options={{
+          href: hasTeachers ? null : undefined,
           title: t.tabs.home,
           tabBarIcon: ({ color }) => <Feather name="home" size={22} color={color} />,
         }}
       />
+
       <Tabs.Screen
         name="my-courses"
         options={{
