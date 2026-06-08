@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -25,7 +25,15 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { t, isRTL } = useLanguage();
+
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Debounce: wait 400 ms after the user stops typing before hitting the API
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const {
     data,
@@ -36,9 +44,10 @@ export default function HomeScreen() {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ["courses", "all"],
+    // Key includes debouncedSearch so any change resets to page 0
+    queryKey: ["courses", "all", debouncedSearch],
     queryFn: ({ pageParam }: { pageParam: number }) =>
-      api.courses.listPaged(pageParam, PAGE_SIZE),
+      api.courses.listPaged(pageParam, PAGE_SIZE, undefined, debouncedSearch || undefined),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
       const loaded = allPages.reduce((sum, p) => sum + p.courses.length, 0);
@@ -48,19 +57,9 @@ export default function HomeScreen() {
     },
   });
 
-  const allCourses = useMemo(
+  const courses = useMemo(
     () => data?.pages.flatMap((p) => p.courses) ?? [],
     [data]
-  );
-
-  const filtered = useMemo(
-    () =>
-      search.trim()
-        ? allCourses.filter((c) =>
-            c.title.toLowerCase().includes(search.toLowerCase())
-          )
-        : allCourses,
-    [allCourses, search]
   );
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -143,7 +142,7 @@ export default function HomeScreen() {
 
       {/* ── Course list ── */}
       <FlatList
-        data={filtered}
+        data={courses}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           styles.list,
@@ -159,7 +158,7 @@ export default function HomeScreen() {
           />
         )}
         onEndReached={() => {
-          if (hasNextPage && !isFetchingNextPage && !search.trim()) {
+          if (hasNextPage && !isFetchingNextPage) {
             fetchNextPage();
           }
         }}
@@ -175,7 +174,11 @@ export default function HomeScreen() {
           <View style={styles.emptyContainer}>
             <Feather name="book" size={48} color={colors.mutedForeground} />
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              {t.courses.empty}
+              {debouncedSearch
+                ? isRTL
+                  ? `لا توجد نتائج لـ "${debouncedSearch}"`
+                  : `No results for "${debouncedSearch}"`
+                : t.courses.empty}
             </Text>
           </View>
         }
@@ -226,6 +229,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 15,
     textAlign: "center",
+    paddingHorizontal: 24,
   },
   errorText: { fontSize: 15, textAlign: "center" },
   retryBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },

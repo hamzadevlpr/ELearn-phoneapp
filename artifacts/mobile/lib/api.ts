@@ -363,11 +363,17 @@ export const api = {
       skip: number,
       take: number,
       portalTeacherId?: string,
+      search?: string,
     ): Promise<{ courses: Course[]; total: number }> => {
       const result = await request<DataAndCount<CourseDto>>(
         "POST",
         "/student-ui/courses/list",
-        { skip, take, portalTeacherId: portalTeacherId || undefined },
+        {
+          skip,
+          take,
+          portalTeacherId: portalTeacherId || undefined,
+          search: search || undefined,
+        },
       );
       return {
         courses: (result?.data ?? []).map((dto) => mapCourse(dto)),
