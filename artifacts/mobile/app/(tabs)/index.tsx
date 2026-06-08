@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -28,12 +28,21 @@ export default function HomeScreen() {
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const searchRef = useRef<TextInput>(null);
 
-  // Debounce: wait 400 ms after the user stops typing before hitting the API
+  // Debounce: wait 3 s after the user stops typing, then hit the API
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 3000);
     return () => clearTimeout(timer);
   }, [search]);
+
+  // Restore keyboard focus after the debounced query fires
+  useEffect(() => {
+    if (debouncedSearch !== "") {
+      const t = setTimeout(() => searchRef.current?.focus(), 60);
+      return () => clearTimeout(t);
+    }
+  }, [debouncedSearch]);
 
   const {
     data,
@@ -123,6 +132,7 @@ export default function HomeScreen() {
         >
           <Feather name="search" size={16} color={colors.mutedForeground} />
           <TextInput
+            ref={searchRef}
             style={[
               styles.searchInput,
               { color: colors.foreground, textAlign: isRTL ? "right" : "left" },
@@ -144,6 +154,8 @@ export default function HomeScreen() {
       <FlatList
         data={courses}
         keyExtractor={(item) => item.id}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="none"
         contentContainerStyle={[
           styles.list,
           { paddingBottom: insets.bottom + 100 },
