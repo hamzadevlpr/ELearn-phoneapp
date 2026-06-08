@@ -28,7 +28,13 @@ export default function CourseDetailScreen() {
   const queryClient = useQueryClient();
   const [showCodeModal, setShowCodeModal] = useState(false);
 
-  const { data: course, isLoading, isError, error, refetch } = useQuery({
+  const {
+    data: course,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["course", id],
     queryFn: () => api.courses.get(id!),
     enabled: !!id,
@@ -73,21 +79,33 @@ export default function CourseDetailScreen() {
   if (isError || !course) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <TouchableOpacity style={styles.backBtnStatic} onPress={() => router.back()}>
-          <Feather name={isRTL ? "arrow-right" : "arrow-left"} size={22} color={colors.foreground} />
+        <TouchableOpacity
+          style={styles.backBtnStatic}
+          onPress={() => router.back()}
+        >
+          <Feather
+            name={isRTL ? "arrow-right" : "arrow-left"}
+            size={22}
+            color={colors.foreground}
+          />
         </TouchableOpacity>
         <Feather name="wifi-off" size={48} color={colors.mutedForeground} />
         <Text style={[styles.errorTitle, { color: colors.foreground }]}>
           {isRTL ? "تعذّر تحميل الكورس" : "Failed to load course"}
         </Text>
         <Text style={[styles.errorMsg, { color: colors.mutedForeground }]}>
-          {(error as Error)?.message ?? (isRTL ? "تحقق من الاتصال وحاول مجدداً" : "Check your connection and try again")}
+          {(error as Error)?.message ??
+            (isRTL
+              ? "تحقق من الاتصال وحاول مجدداً"
+              : "Check your connection and try again")}
         </Text>
         <TouchableOpacity
           style={[styles.retryBtn, { backgroundColor: colors.primary }]}
           onPress={() => refetch()}
         >
-          <Text style={styles.retryBtnText}>{isRTL ? "إعادة المحاولة" : "Retry"}</Text>
+          <Text style={styles.retryBtnText}>
+            {isRTL ? "إعادة المحاولة" : "Retry"}
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -96,13 +114,15 @@ export default function CourseDetailScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
-
         {/* ── Hero: intro video (animated webp) or thumbnail ── */}
         <View style={styles.heroContainer}>
           {course.introVideoUrl ? (
             <>
               <Image
-                source={{ uri: course.introVideoUrl, headers: { Referer: "https://localhost" } }}
+                source={{
+                  uri: course.introVideoUrl,
+                  headers: { Referer: "https://localhost" },
+                }}
                 style={styles.hero}
                 contentFit="cover"
                 autoplay
@@ -116,9 +136,18 @@ export default function CourseDetailScreen() {
               </View>
             </>
           ) : course.image ? (
-            <Image source={{ uri: course.image }} style={styles.hero} contentFit="cover" />
+            <Image
+              source={{ uri: course.image }}
+              style={styles.hero}
+              contentFit="cover"
+            />
           ) : (
-            <View style={[styles.heroPlaceholder, { backgroundColor: colors.secondary }]}>
+            <View
+              style={[
+                styles.heroPlaceholder,
+                { backgroundColor: colors.secondary },
+              ]}
+            >
               <Feather name="book-open" size={64} color={colors.primary} />
             </View>
           )}
@@ -128,25 +157,49 @@ export default function CourseDetailScreen() {
           />
           {/* Back button */}
           <TouchableOpacity
-            style={[styles.backBtn, { top: (Platform.OS === "web" ? 67 : insets.top) + 8 }]}
+            style={[
+              styles.backBtn,
+              { top: (Platform.OS === "web" ? 67 : insets.top) + 8 },
+            ]}
             onPress={() => router.back()}
           >
-            <Feather name={isRTL ? "arrow-right" : "arrow-left"} size={22} color="#fff" />
+            <Feather
+              name={isRTL ? "arrow-right" : "arrow-left"}
+              size={22}
+              color="#fff"
+            />
           </TouchableOpacity>
 
           {/* Title overlay on hero */}
-          <View style={[styles.heroBottom, { alignItems: isRTL ? "flex-end" : "flex-start" }]}>
+          <View
+            style={[
+              styles.heroBottom,
+              { alignItems: isRTL ? "flex-end" : "flex-start" },
+            ]}
+          >
             {course.isPurchased && (
               <View style={styles.enrolledBadge}>
                 <Feather name="check-circle" size={12} color="#fff" />
-                <Text style={styles.enrolledBadgeText}>{isRTL ? "مشترك" : "Enrolled"}</Text>
+                <Text style={styles.enrolledBadgeText}>
+                  {isRTL ? "مشترك" : "Enrolled"}
+                </Text>
               </View>
             )}
-            <Text style={[styles.heroTitle, { textAlign: isRTL ? "right" : "left" }]}>
+            <Text
+              style={[
+                styles.heroTitle,
+                { textAlign: isRTL ? "right" : "left" },
+              ]}
+            >
               {course.title}
             </Text>
             {course.teacherName ? (
-              <View style={[styles.teacherRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+              <View
+                style={[
+                  styles.teacherRow,
+                  { flexDirection: isRTL ? "row-reverse" : "row" },
+                ]}
+              >
                 <Feather name="user" size={13} color="rgba(255,255,255,0.85)" />
                 <Text style={styles.teacherName}>{course.teacherName}</Text>
               </View>
@@ -155,24 +208,36 @@ export default function CourseDetailScreen() {
         </View>
 
         {/* ── Quick stats ── */}
-        <View style={[styles.statsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.statsCard,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
           <StatItem
             icon="play-circle"
             value={course.lessonsCount ?? 0}
             label={isRTL ? "درس" : "Lessons"}
             color="#6c63ff"
           />
-          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+          <View
+            style={[styles.statDivider, { backgroundColor: colors.border }]}
+          />
           <StatItem
             icon="help-circle"
             value={course.examsCount ?? 0}
             label={isRTL ? "اختبار" : "Quizzes"}
             color="#f39c12"
           />
-          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+          <View
+            style={[styles.statDivider, { backgroundColor: colors.border }]}
+          />
           <StatItem
             icon="tag"
-            value={course.codePriceName ?? (course.price ? `${course.price} ج` : (isRTL ? "مجاني" : "Free"))}
+            value={
+              course.codePriceName ??
+              (course.price ? `${course.price} ج` : isRTL ? "مجاني" : "Free")
+            }
             label={isRTL ? "السعر" : "Price"}
             color={colors.primary}
             isText
@@ -183,98 +248,127 @@ export default function CourseDetailScreen() {
         <View style={styles.section}>
           {/* Grade / subject chips */}
           {(course.grade || course.subject) && (
-            <View style={[styles.chipRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+            <View
+              style={[
+                styles.chipRow,
+                { flexDirection: isRTL ? "row-reverse" : "row" },
+              ]}
+            >
               {course.grade && (
-                <View style={[styles.infoChip, { backgroundColor: colors.secondary }]}>
+                <View
+                  style={[
+                    styles.infoChip,
+                    { backgroundColor: colors.secondary },
+                  ]}
+                >
                   <Feather name="award" size={12} color={colors.primary} />
-                  <Text style={[styles.infoChipText, { color: colors.primary }]}>{course.grade}</Text>
+                  <Text
+                    style={[styles.infoChipText, { color: colors.primary }]}
+                  >
+                    {course.grade}
+                  </Text>
                 </View>
               )}
               {course.subject && (
-                <View style={[styles.infoChip, { backgroundColor: colors.secondary }]}>
+                <View
+                  style={[
+                    styles.infoChip,
+                    { backgroundColor: colors.secondary },
+                  ]}
+                >
                   <Feather name="book" size={12} color={colors.primary} />
-                  <Text style={[styles.infoChipText, { color: colors.primary }]}>{course.subject}</Text>
+                  <Text
+                    style={[styles.infoChipText, { color: colors.primary }]}
+                  >
+                    {course.subject}
+                  </Text>
                 </View>
               )}
             </View>
           )}
 
           {/* About */}
-          <Text style={[styles.sectionTitle, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.foreground, textAlign: isRTL ? "right" : "left" },
+            ]}
+          >
             {isRTL ? "عن الكورس" : "About"}
           </Text>
-          <Text style={[styles.description, { color: colors.mutedForeground, textAlign: isRTL ? "right" : "left" }]}>
-            {course.description || (isRTL ? "لا يوجد وصف متاح لهذا الكورس." : "No description available for this course.")}
+          <Text
+            style={[
+              styles.description,
+              {
+                color: colors.mutedForeground,
+                textAlign: isRTL ? "right" : "left",
+              },
+            ]}
+          >
+            {course.description ||
+              (isRTL
+                ? "لا يوجد وصف متاح لهذا الكورس."
+                : "No description available for this course.")}
           </Text>
         </View>
 
         {/* ── What you'll learn ── */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.foreground, textAlign: isRTL ? "right" : "left" },
+            ]}
+          >
             {isRTL ? "ما ستتعلمه" : "What's included"}
           </Text>
           <View style={styles.featureList}>
             {[
-              { icon: "play-circle" as const, color: "#6c63ff", text: isRTL ? `${course.lessonsCount ?? 0} فيديو تعليمي` : `${course.lessonsCount ?? 0} video lessons` },
-              { icon: "help-circle" as const, color: "#f39c12", text: isRTL ? `${course.examsCount ?? 0} اختبار تفاعلي` : `${course.examsCount ?? 0} interactive quizzes` }
+              {
+                icon: "play-circle" as const,
+                color: "#6c63ff",
+                text: isRTL
+                  ? `${course.lessonsCount ?? 0} فيديو تعليمي`
+                  : `${course.lessonsCount ?? 0} video lessons`,
+              },
+              {
+                icon: "help-circle" as const,
+                color: "#f39c12",
+                text: isRTL
+                  ? `${course.examsCount ?? 0} اختبار تفاعلي`
+                  : `${course.examsCount ?? 0} interactive quizzes`,
+              },
             ].map((f, i) => (
-              <View key={i} style={[styles.featureRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
-                <View style={[styles.featureIcon, { backgroundColor: f.color + "20" }]}>
+              <View
+                key={i}
+                style={[
+                  styles.featureRow,
+                  { flexDirection: isRTL ? "row-reverse" : "row" },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.featureIcon,
+                    { backgroundColor: f.color + "20" },
+                  ]}
+                >
                   <Feather name={f.icon} size={15} color={f.color} />
                 </View>
-                <Text style={[styles.featureText, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
+                <Text
+                  style={[
+                    styles.featureText,
+                    {
+                      color: colors.foreground,
+                      textAlign: isRTL ? "right" : "left",
+                    },
+                  ]}
+                >
                   {f.text}
                 </Text>
               </View>
             ))}
           </View>
         </View>
-
-        {/* ── Course content (topics from API) ── */}
-        {course.topics && course.topics.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
-              {isRTL ? "محتوى الكورس" : "Course Content"}
-            </Text>
-            <View style={[styles.topicsContainer, { borderColor: colors.border }]}>
-              {course.topics.map((topic: CourseTopic, index: number) => {
-                const isVideo = topic.courseLessonType === 0;
-                const isPdf = topic.courseLessonType === 1;
-                const isQuiz = topic.courseLessonType === 2;
-                const isArticle = topic.courseLessonType === 3;
-                const iconName = isVideo ? "play-circle" : isPdf ? "file-text" : isQuiz ? "help-circle" : "book-open";
-                const iconColor = isVideo ? "#6c63ff" : isPdf ? "#e74c3c" : isQuiz ? "#f39c12" : "#27ae60";
-                const mins = (topic.totalHours ?? 0) * 60 + (topic.totalMinutes ?? 0);
-                const isLast = index === course.topics.length - 1;
-                return (
-                  <View
-                    key={topic.id}
-                    style={[
-                      styles.topicRow,
-                      { flexDirection: isRTL ? "row-reverse" : "row", borderBottomWidth: isLast ? 0 : 1, borderBottomColor: colors.border },
-                    ]}
-                  >
-                    <View style={[styles.topicIcon, { backgroundColor: iconColor + "18" }]}>
-                      <Feather name={iconName as any} size={16} color={iconColor} />
-                    </View>
-                    <View style={[styles.topicInfo, { alignItems: isRTL ? "flex-end" : "flex-start" }]}>
-                      <Text style={[styles.topicTitle, { color: colors.foreground }]} numberOfLines={2}>
-                        {topic.title}
-                      </Text>
-                      <Text style={[styles.topicMeta, { color: colors.mutedForeground }]}>
-                        {topic.courseLessonTypeName}
-                        {mins > 0 ? ` · ${mins} ${isRTL ? "دقيقة" : "min"}` : ""}
-                      </Text>
-                    </View>
-                    {topic.isNotShowUntilExamPass && (
-                      <Feather name="lock" size={14} color={colors.mutedForeground} style={{ marginStart: isRTL ? 0 : "auto", marginEnd: isRTL ? "auto" : 0 }} />
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        )}
 
         {/* ── Recommendations ── */}
         {suggested.length > 0 && (
@@ -283,61 +377,110 @@ export default function CourseDetailScreen() {
               {isRTL ? "كورسات مشابهة" : "Recommendations"}
             </Text>
             <View style={{ gap: 12 }}>
-              {suggested.filter((s) => s.id !== id).slice(0, 3).map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.recCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={() => router.push({ pathname: "/course/[id]", params: { id: item.id } })}
-                  activeOpacity={0.82}
-                >
-                  {/* Thumbnail */}
-                  {item.image ? (
-                    <Image
-                      source={{ uri: item.image }}
-                      style={styles.recThumb}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={[styles.recThumb, styles.recThumbPlaceholder, { backgroundColor: colors.primary + "22" }]}>
-                      <Feather name="book-open" size={22} color={colors.primary} />
-                    </View>
-                  )}
-
-                  {/* Info */}
-                  <View style={[styles.recInfo, { alignItems: isRTL ? "flex-end" : "flex-start" }]}>
-                    <Text
-                      style={[styles.recTitle, { color: colors.foreground }]}
-                      numberOfLines={2}
-                    >
-                      {item.title}
-                    </Text>
-                    {item.teacherName ? (
-                      <Text style={[styles.recTeacher, { color: colors.mutedForeground }]} numberOfLines={1}>
-                        {item.teacherName}
-                      </Text>
-                    ) : null}
-                    {item.grade ? (
-                      <View style={[styles.recChip, { backgroundColor: colors.primary + "18" }]}>
-                        <Text style={[styles.recChipText, { color: colors.primary }]}>{item.grade}</Text>
+              {suggested
+                .filter((s) => s.id !== id)
+                .slice(0, 3)
+                .map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.recCard,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/course/[id]",
+                        params: { id: item.id },
+                      })
+                    }
+                    activeOpacity={0.82}
+                  >
+                    {/* Thumbnail */}
+                    {item.image ? (
+                      <Image
+                        source={{ uri: item.image }}
+                        style={styles.recThumb}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View
+                        style={[
+                          styles.recThumb,
+                          styles.recThumbPlaceholder,
+                          { backgroundColor: colors.primary + "22" },
+                        ]}
+                      >
+                        <Feather
+                          name="book-open"
+                          size={22}
+                          color={colors.primary}
+                        />
                       </View>
-                    ) : null}
-                  </View>
+                    )}
 
-                  {/* Price + arrow */}
-                  <View style={styles.recRight}>
-                    {item.codePriceName ? (
-                      <Text style={[styles.recPrice, { color: colors.primary }]}>
-                        {item.codePriceName}
+                    {/* Info */}
+                    <View
+                      style={[
+                        styles.recInfo,
+                        { alignItems: isRTL ? "flex-end" : "flex-start" },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.recTitle, { color: colors.foreground }]}
+                        numberOfLines={2}
+                      >
+                        {item.title}
                       </Text>
-                    ) : null}
-                    <Feather
-                      name={isRTL ? "chevron-left" : "chevron-right"}
-                      size={18}
-                      color={colors.mutedForeground}
-                    />
-                  </View>
-                </TouchableOpacity>
-              ))}
+                      {item.teacherName ? (
+                        <Text
+                          style={[
+                            styles.recTeacher,
+                            { color: colors.mutedForeground },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.teacherName}
+                        </Text>
+                      ) : null}
+                      {item.grade ? (
+                        <View
+                          style={[
+                            styles.recChip,
+                            { backgroundColor: colors.primary + "18" },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.recChipText,
+                              { color: colors.primary },
+                            ]}
+                          >
+                            {item.grade}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    {/* Price + arrow */}
+                    <View style={styles.recRight}>
+                      {item.codePriceName ? (
+                        <Text
+                          style={[styles.recPrice, { color: colors.primary }]}
+                        >
+                          {item.codePriceName}
+                        </Text>
+                      ) : null}
+                      <Feather
+                        name={isRTL ? "chevron-left" : "chevron-right"}
+                        size={18}
+                        color={colors.mutedForeground}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                ))}
             </View>
           </View>
         )}
@@ -349,7 +492,11 @@ export default function CourseDetailScreen() {
       <View
         style={[
           styles.actionBar,
-          { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom + 12 },
+          {
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
+            paddingBottom: insets.bottom + 12,
+          },
         ]}
       >
         {course.isPurchased ? (
@@ -438,7 +585,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   hero: { width: "100%", height: "100%" },
-  heroPlaceholder: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
+  heroPlaceholder: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   backBtn: {
     position: "absolute",
     left: 16,

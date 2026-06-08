@@ -358,6 +358,23 @@ export const api = {
       return (result?.data ?? []).map((dto) => mapCourse(dto));
     },
 
+    // Paginated version — returns courses + total count
+    listPaged: async (
+      skip: number,
+      take: number,
+      portalTeacherId?: string,
+    ): Promise<{ courses: Course[]; total: number }> => {
+      const result = await request<DataAndCount<CourseDto>>(
+        "POST",
+        "/student-ui/courses/list",
+        { skip, take, portalTeacherId: portalTeacherId || undefined },
+      );
+      return {
+        courses: (result?.data ?? []).map((dto) => mapCourse(dto)),
+        total: result?.count ?? 0,
+      };
+    },
+
     // GET /student-ui/courses/{id} → CourseWithDetailsDto (no ReponseResult wrapper)
     get: async (id: string): Promise<CourseDetails> => {
       const result = await request<CourseWithDetailsDto>(

@@ -1,8 +1,8 @@
 import { Feather } from "@expo/vector-icons";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -19,19 +19,48 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 import { api } from "@/lib/api";
 
+const PAGE_SIZE = 10;
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { t, isRTL } = useLanguage();
   const [search, setSearch] = useState("");
 
-  const { data: courses, isLoading, error, refetch } = useQuery({
+  const {
+    data,
+    isLoading,
+    error,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ["courses", "all"],
-    queryFn: () => api.courses.list(undefined),
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      api.courses.listPaged(pageParam, PAGE_SIZE),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      const loaded = allPages.reduce((sum, p) => sum + p.courses.length, 0);
+      if (lastPage.courses.length < PAGE_SIZE) return undefined;
+      if (loaded >= lastPage.total) return undefined;
+      return loaded;
+    },
   });
 
-  const filtered = (courses ?? []).filter((c) =>
-    c.title.toLowerCase().includes(search.toLowerCase())
+  const allCourses = useMemo(
+    () => data?.pages.flatMap((p) => p.courses) ?? [],
+    [data]
+  );
+
+  const filtered = useMemo(
+    () =>
+      search.trim()
+        ? allCourses.filter((c) =>
+            c.title.toLowerCase().includes(search.toLowerCase())
+          )
+        : allCourses,
+    [allCourses, search]
   );
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -63,13 +92,23 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* ── Header + Search ── */}
       <View
         style={[
           styles.header,
-          { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border },
+          {
+            paddingTop: topPad + 12,
+            backgroundColor: colors.card,
+            borderBottomColor: colors.border,
+          },
         ]}
       >
-        <Text style={[styles.title, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
+        <Text
+          style={[
+            styles.title,
+            { color: colors.foreground, textAlign: isRTL ? "right" : "left" },
+          ]}
+        >
           {t.courses.title}
         </Text>
 
@@ -85,7 +124,10 @@ export default function HomeScreen() {
         >
           <Feather name="search" size={16} color={colors.mutedForeground} />
           <TextInput
-            style={[styles.searchInput, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}
+            style={[
+              styles.searchInput,
+              { color: colors.foreground, textAlign: isRTL ? "right" : "left" },
+            ]}
             value={search}
             onChangeText={setSearch}
             placeholder={t.courses.search}
@@ -99,10 +141,14 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* ── Course list ── */}
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[
+          styles.list,
+          { paddingBottom: insets.bottom + 100 },
+        ]}
         renderItem={({ item }) => (
           <CourseCard
             course={item}
@@ -112,6 +158,19 @@ export default function HomeScreen() {
             }}
           />
         )}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage && !search.trim()) {
+            fetchNextPage();
+          }
+        }}
+        onEndReachedThreshold={0.35}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={styles.footerSpinner}>
+              <ActivityIndicator color={colors.primary} size="small" />
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Feather name="book" size={48} color={colors.mutedForeground} />
@@ -154,6 +213,10 @@ const styles = StyleSheet.create({
   },
   list: {
     padding: 16,
+  },
+  footerSpinner: {
+    paddingVertical: 20,
+    alignItems: "center",
   },
   emptyContainer: {
     paddingTop: 80,
