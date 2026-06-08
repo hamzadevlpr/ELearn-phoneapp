@@ -524,15 +524,24 @@ export const api = {
   },
 
   quizzes: {
-    // POST /student-ui/quiz-submissions — submit inline quiz answers
-    submit: (
-      quizId: string,
-      answers: { questionId: string; selectedKey: number }[],
-    ) =>
-      request<StudentExam>(
+    // POST /student-ui/student-exams/create
+    submit: (params: {
+      quizId: string;
+      startTime: Date;
+      endTime: Date;
+      degree: number;      // correct answers count
+      totalDegree: number; // total questions
+    }) =>
+      request<{ id: string }>(
         "POST",
-        "/student-ui/quiz-submissions",
-        { quizId, answers },
+        "/student-ui/student-exams/create",
+        {
+          quizId: params.quizId,
+          startTime: params.startTime.toISOString(),
+          endTime: params.endTime.toISOString(),
+          degree: params.degree,
+          totalDegree: params.totalDegree,
+        },
       ),
   },
 

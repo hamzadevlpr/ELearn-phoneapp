@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -344,6 +344,12 @@ function ScoreBadge({ exam }: { exam: StudentExam }) {
 // ─── Quiz Modal ───────────────────────────────────────────────────────────────
 type QuizPhase = "result" | "taking";
 
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 function QuizModal({
   quiz,
   existingResult,
@@ -359,7 +365,9 @@ function QuizModal({
   insets: ReturnType<typeof import("react-native-safe-area-context").useSafeAreaInsets>;
   onDone: () => void;
 }) {
+  const hasTimer = quiz.maxTimeInMinutes > 0;
   const initialPhase: QuizPhase = existingResult ? "result" : "taking";
+
   const [phase, setPhase] = useState<QuizPhase>(initialPhase);
   const [selectedKeys, setSelectedKeys] = useState<Record<string, number[]>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -368,8 +376,39 @@ function QuizModal({
     total: number;
     pct: number;
   } | null>(null);
+  const [timeLeft, setTimeLeft] = useState(
+    hasTimer ? quiz.maxTimeInMinutes * 60 : 0,
+  );
 
-  const allAnswered = quiz.questions.every((q) => (selectedKeys[q.id]?.length ?? 0) > 0);
+  // Track start time for the API submission
+  const startTimeRef = useRef(new Date());
+  // Guard against double-submission (timer + manual)
+  const submittingRef = useRef(false);
+  // Always-fresh ref to submit so the interval can call it without stale closure
+  const submitRef = useRef<() => void>(() => {});
+
+  // ── Countdown timer ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!hasTimer || phase !== "taking") return;
+
+    const id = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(id);
+          // Auto-submit after state settles
+          setTimeout(() => submitRef.current(), 50);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, [phase, hasTimer]);
+
+  const allAnswered = quiz.questions.every(
+    (q) => (selectedKeys[q.id]?.length ?? 0) > 0,
+  );
 
   function toggleKey(questionId: string, key: number, isMulti: boolean) {
     setSelectedKeys((prev) => {
@@ -377,51 +416,71 @@ function QuizModal({
       if (isMulti) {
         return {
           ...prev,
-          [questionId]: current.includes(key) ? current.filter((k) => k !== key) : [...current, key],
+          [questionId]: current.includes(key)
+            ? current.filter((k) => k !== key)
+            : [...current, key],
         };
       }
       return { ...prev, [questionId]: [key] };
     });
   }
 
+  // ── Submit ───────────────────────────────────────────────────────────────
   async function handleSubmit() {
+    if (submittingRef.current || phase === "result") return;
+    submittingRef.current = true;
     setSubmitting(true);
+
+    const endTime = new Date();
+
+    // Evaluate score locally
     const correct = quiz.questions.filter((q) => {
       const sel = [...(selectedKeys[q.id] ?? [])].sort((a, b) => a - b);
       const ans = [...q.answers].sort((a, b) => a - b);
-      return sel.length === ans.length && sel.every((v, i) => v === ans[i]);
+      return sel.length > 0 && sel.length === ans.length && sel.every((v, i) => v === ans[i]);
     }).length;
     const total = quiz.questions.length;
     const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
     setLocalResult({ correct, total, pct });
 
-    const answers = quiz.questions.map((q) => ({
-      questionId: q.id,
-      selectedKey: selectedKeys[q.id]?.[0] ?? 0,
-    }));
+    // Submit to backend (best-effort)
     try {
-      await api.quizzes.submit(quiz.id, answers);
+      await api.quizzes.submit({
+        quizId: quiz.id,
+        startTime: startTimeRef.current,
+        endTime,
+        degree: correct,
+        totalDegree: total,
+      });
     } catch {
-      // submission is best-effort; local result is still shown
+      // local result still displayed
     }
+
+    submittingRef.current = false;
     setSubmitting(false);
     setPhase("result");
   }
+
+  // Keep ref in sync every render
+  submitRef.current = handleSubmit;
 
   const displayResult = localResult
     ? localResult
     : existingResult
     ? {
-        correct: Math.round((existingResult.degreePercent / 100) * existingResult.totalDegree),
+        correct: existingResult.degree,
         total: existingResult.totalDegree,
         pct: Math.round(existingResult.degreePercent),
       }
     : null;
 
+  const timerColor =
+    timeLeft <= 60 ? "#e74c3c" : timeLeft <= 120 ? "#f39c12" : colors.primary;
+
   return (
     <Modal visible animationType="slide" statusBarTranslucent>
       <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
-        {/* Modal header */}
+        {/* ── Modal Header ── */}
         <View
           style={[
             styles.modalHeader,
@@ -436,17 +495,25 @@ function QuizModal({
           <TouchableOpacity style={styles.backBtn} onPress={onDone}>
             <Feather name="x" size={22} color={colors.foreground} />
           </TouchableOpacity>
+
           <View style={[styles.headerTitle, { alignItems: isRTL ? "flex-end" : "flex-start" }]}>
             <Text style={[styles.headerText, { color: colors.foreground }]} numberOfLines={1}>
               {quiz.title}
             </Text>
             <Text style={[styles.quizMeta, { color: colors.mutedForeground }]}>
               {quiz.questions.length} {isRTL ? "سؤال" : "questions"}
-              {quiz.maxTimeInMinutes > 0
-                ? ` • ${quiz.maxTimeInMinutes} ${isRTL ? "دقيقة" : "min"}`
-                : ""}
             </Text>
           </View>
+
+          {/* Countdown timer badge */}
+          {hasTimer && phase === "taking" && (
+            <View style={[styles.timerBadge, { backgroundColor: timerColor + "18", borderColor: timerColor + "40" }]}>
+              <Feather name="clock" size={13} color={timerColor} />
+              <Text style={[styles.timerText, { color: timerColor }]}>
+                {formatTime(timeLeft)}
+              </Text>
+            </View>
+          )}
         </View>
 
         {phase === "taking" ? (
@@ -485,18 +552,13 @@ function QuizModal({
             >
               {!allAnswered && (
                 <Text style={[styles.submitHint, { color: colors.mutedForeground }]}>
-                  {isRTL ? "أجب على جميع الأسئلة أولاً" : "Answer all questions to submit"}
+                  {isRTL ? "يمكنك التسليم في أي وقت" : "You can submit at any time"}
                 </Text>
               )}
               <TouchableOpacity
-                style={[
-                  styles.submitBtn,
-                  {
-                    backgroundColor: allAnswered ? colors.primary : colors.border,
-                  },
-                ]}
+                style={[styles.submitBtn, { backgroundColor: colors.primary }]}
                 onPress={handleSubmit}
-                disabled={!allAnswered || submitting}
+                disabled={submitting}
                 activeOpacity={0.85}
               >
                 {submitting ? (
@@ -510,7 +572,6 @@ function QuizModal({
             </View>
           </>
         ) : (
-          /* Result Phase */
           <ScrollView
             contentContainerStyle={[
               styles.resultContainer,
@@ -527,6 +588,9 @@ function QuizModal({
                 onRetake={() => {
                   setSelectedKeys({});
                   setLocalResult(null);
+                  submittingRef.current = false;
+                  startTimeRef.current = new Date();
+                  setTimeLeft(hasTimer ? quiz.maxTimeInMinutes * 60 : 0);
                   setPhase("taking");
                 }}
                 showRetake={!existingResult}
@@ -966,6 +1030,17 @@ const styles = StyleSheet.create({
     gap: 8,
     alignItems: "center",
   },
+  timerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1,
+    flexShrink: 0,
+  },
+  timerText: { fontSize: 14, fontWeight: "700", fontVariant: ["tabular-nums"] },
   submitHint: { fontSize: 12, textAlign: "center" },
   submitBtn: {
     width: "100%",
