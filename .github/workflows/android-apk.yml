@@ -57,7 +57,6 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
 
-      # FIXED: Replaced external downloading setup action with native runner path variables
       - name: Set Android SDK Environment Variables
         run: |
           echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
@@ -77,10 +76,10 @@ jobs:
       - name: Install JS dependencies
         run: pnpm install --no-frozen-lockfile
 
-      # ── 5. Expo Prebuild ──────────────────────────────────────────────────
+      # ── 5. Expo Prebuild (FIXED: Added --no-install flag) ─────────────────
       - name: Expo Prebuild → Android
         working-directory: artifacts/mobile
-        run: pnpm exec expo prebuild --platform android --clean
+        run: pnpm exec expo prebuild --platform android --clean --no-install
         env:
           EXPO_NO_TELEMETRY: 1
           EXPO_ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
