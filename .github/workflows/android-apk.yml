@@ -96,18 +96,26 @@ jobs:
           key: gradle-ndk-${{ runner.os }}-${{ hashFiles('artifacts/mobile/package.json') }}
           restore-keys: gradle-ndk-${{ runner.os }}-
 
-      # ── 4. Install JS dependencies ────────────────────────────────────────
-      - name: Install JS dependencies
+      # ── 4. Install root JS dependencies ──────────────────────────────────
+      # FIX: Install root workspace dependencies first
+      - name: Install root JS dependencies
         run: pnpm install --no-frozen-lockfile
 
-      # ── 5. Expo Prebuild (generates the native Android project) ───────────
+      # ── 5. Install mobile JS dependencies ────────────────────────────────
+      # FIX: Also install inside the mobile folder specifically
+      - name: Install mobile JS dependencies
+        working-directory: artifacts/mobile
+        run: pnpm install --no-frozen-lockfile
+
+      # ── 6. Expo Prebuild (generates the native Android project) ───────────
+      # FIX: Removed --no-install so native modules get properly linked
       - name: Expo Prebuild → Android
         working-directory: artifacts/mobile
-        run: pnpm exec expo prebuild --platform android --clean --no-install
+        run: pnpm exec expo prebuild --platform android --clean
         env:
           EXPO_NO_TELEMETRY: 1
 
-      # ── 6. Resolve build variant & metadata ──────────────────────────────
+      # ── 7. Resolve build variant & metadata ──────────────────────────────
       - name: Resolve variant & metadata
         id: vars
         run: |
@@ -131,9 +139,8 @@ jobs:
             echo "apk_dir=debug"               >> "$GITHUB_OUTPUT"
           fi
 
-# ── 7. Release signing (skipped if keystore secret is absent) ─────────
+      # ── 8. Release signing (skipped if keystore secret is absent) ─────────
       - name: Decode keystore
-        # ✅ FIX: Check the safe env context instead of the blocked secrets context
         if: steps.vars.outputs.variant == 'release' && env.KEYSTORE_SECRET != ''
         env:
           KEYSTORE_SECRET: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -141,7 +148,6 @@ jobs:
           echo "$KEYSTORE_SECRET" | base64 --decode > artifacts/mobile/android/app/release.keystore
 
       - name: Inject signing config into gradle.properties
-        # ✅ FIX: Check the safe env context instead of the blocked secrets context
         if: steps.vars.outputs.variant == 'release' && env.KEYSTORE_SECRET != ''
         env:
           KEYSTORE_SECRET: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -154,7 +160,7 @@ jobs:
           MYAPP_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}
           SIGNING
 
-      # ── 8. Build APK ──────────────────────────────────────────────────────
+      # ── 9. Build APK ──────────────────────────────────────────────────────
       - name: Build APK (${{ steps.vars.outputs.variant }})
         working-directory: artifacts/mobile/android
         run: |
@@ -169,7 +175,7 @@ jobs:
             -XX:MaxMetaspaceSize=512m
             -Dorg.gradle.daemon=false
 
-      # ── 9. Locate produced APK ────────────────────────────────────────────
+      # ── 10. Locate produced APK ───────────────────────────────────────────
       - name: Locate APK file
         id: apk
         run: |
@@ -177,7 +183,7 @@ jobs:
           APK_PATH=$(ls "${APK_DIR}"/app-*.apk | head -1)
           echo "path=${APK_PATH}" >> "$GITHUB_OUTPUT"
 
-      # ── 10. Save as GitHub Actions artifact (downloadable without S3) ─────
+      # ── 11. Save as GitHub Actions artifact (downloadable without S3) ─────
       - name: Upload APK as Actions artifact
         uses: actions/upload-artifact@v4
         with:
@@ -185,7 +191,7 @@ jobs:
           path: ${{ steps.apk.outputs.path }}
           retention-days: 14
 
-      # ── 11. Upload to S3 ──────────────────────────────────────────────────
+      # ── 12. Upload to S3 ──────────────────────────────────────────────────
       - name: Upload APK to S3
         run: |
           aws s3 cp \
@@ -196,7 +202,7 @@ jobs:
           AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      # ── 12. Build summary ─────────────────────────────────────────────────
+      # ── 13. Build summary ─────────────────────────────────────────────────
       - name: Write job summary
         if: always()
         run: |

@@ -153,47 +153,36 @@ export interface Teacher {
   image?: string;
   subject?: string;
   phone?: string;
+  coursesCount?: number;
 }
 
 export interface Course {
-  about: string | null;
-  codePriceId: string; // UUID string
-  codePriceName: string; // e.g., "70"
-  codePriceValue: number | null;
-  courseStatusName: string; // e.g., "يظهر الان"
-  createdOn: string; // ISO Date string
-  discount: number | null;
-  id: string; // UUID string
-  introVideoUrl: string; // URL string
-  language: number; // e.g., 1
-  mainTeacherAvatar: string | null;
-  mainTeacherId: string; // UUID string
-  mainTeacherName: string;
-  materialStudy: number;
-  materialStudyName: string; // e.g., "Mathematics"
-  portalTeacherAvatar: string | null;
-  portalTeacherId: string | null;
-  portalTeacherName: string | null;
-  priceType: number;
-  startDate: string; // ISO Date string
-  status: number;
-  studentGrade: number; // e.g., 8
-  studentGradeName: string; // e.g., "الصف الثانى الاعدادى"
-  teacherAvatar: string | null;
-  teacherId: string; // UUID string
-  teacherName: string;
-  teacherPhone: string;
-  teacherWhatsapp: string;
-  thumbnailUrl: string; // S3 URL string
-  title: string; // e.g., "M2_EXAM NIGHT "
-  totaDocuments: number; // Note: kept the typo 'tota' from the backend key
-  totaExams: number; // Note: kept the typo 'tota' from the backend key
-  totalDurationHours: number;
-  totalDurationMinutes: number;
-  totalLessons: number;
-  totalStudents: number | null;
-  totalUsedCodes: number;
-  totalViews: number;
+  id: string;
+  title: string;
+  description?: string;
+  image?: string;
+  introVideoUrl?: string;
+  price?: number;
+  lessonsCount?: number;
+  examsCount?: number;
+  teacherName?: string;
+  teacherId?: string;
+  isPurchased?: boolean;
+  grade?: string;
+  subject?: string;
+  materialStudy?: number;
+  codePriceName?: string;
+}
+
+export interface Exam {
+  id: string;
+  title: string;
+  courseId: string;
+  questions?: {
+    id: string;
+    text: string;
+    options: string[];
+  }[];
 }
 
 export interface CourseDetails extends Course {
