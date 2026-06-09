@@ -133,17 +133,17 @@ jobs:
 
       # ── 7. Release signing (skipped if keystore secret is absent) ─────────
       - name: Decode keystore
-        if: >
-          steps.vars.outputs.variant == 'release' &&
-          secrets.ANDROID_KEYSTORE_BASE64 != ''
+        # We check the standard step output and our mapped env variable instead of 'secrets'
+        if: steps.vars.outputs.variant == 'release' && env.KEYSTORE_SECRET != ''
+        env:
+          KEYSTORE_SECRET: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" \
-            | base64 --decode > artifacts/mobile/android/app/release.keystore
+          echo "$KEYSTORE_SECRET" | base64 --decode > artifacts/mobile/android/app/release.keystore
 
       - name: Inject signing config into gradle.properties
-        if: >
-          steps.vars.outputs.variant == 'release' &&
-          secrets.ANDROID_KEYSTORE_BASE64 != ''
+        if: steps.vars.outputs.variant == 'release' && env.KEYSTORE_SECRET != ''
+        env:
+          KEYSTORE_SECRET: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         working-directory: artifacts/mobile/android
         run: |
           cat >> gradle.properties << 'SIGNING'
