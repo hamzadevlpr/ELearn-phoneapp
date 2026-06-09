@@ -131,9 +131,9 @@ jobs:
             echo "apk_dir=debug"               >> "$GITHUB_OUTPUT"
           fi
 
-      # ── 7. Release signing (skipped if keystore secret is absent) ─────────
+# ── 7. Release signing (skipped if keystore secret is absent) ─────────
       - name: Decode keystore
-        # We check the standard step output and our mapped env variable instead of 'secrets'
+        # ✅ FIX: Check the safe env context instead of the blocked secrets context
         if: steps.vars.outputs.variant == 'release' && env.KEYSTORE_SECRET != ''
         env:
           KEYSTORE_SECRET: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -141,6 +141,7 @@ jobs:
           echo "$KEYSTORE_SECRET" | base64 --decode > artifacts/mobile/android/app/release.keystore
 
       - name: Inject signing config into gradle.properties
+        # ✅ FIX: Check the safe env context instead of the blocked secrets context
         if: steps.vars.outputs.variant == 'release' && env.KEYSTORE_SECRET != ''
         env:
           KEYSTORE_SECRET: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
