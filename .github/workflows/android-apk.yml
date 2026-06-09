@@ -1,23 +1,6 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # Build Android APK → Upload to S3
 # ──────────────────────────────────────────────────────────────────────────────
-#
-# Required GitHub Secrets:
-#   AWS_ACCESS_KEY_ID         — IAM access key with s3:PutObject on the bucket
-#   AWS_SECRET_ACCESS_KEY     — Matching IAM secret key
-#   AWS_S3_BUCKET             — Bucket name (e.g. my-releases)
-#   AWS_REGION                — Bucket region (e.g. us-east-1)
-#
-# Optional Secrets (only needed for a SIGNED release APK):
-#   ANDROID_KEYSTORE_BASE64   — base64-encoded .jks / .keystore file
-#                               Generate: base64 -w 0 release.keystore
-#   ANDROID_KEYSTORE_PASSWORD — Keystore password
-#   ANDROID_KEY_ALIAS         — Key alias inside the keystore
-#   ANDROID_KEY_PASSWORD      — Key password
-#
-# S3 output path:
-#   builds/android/v{version}/{YYYYMMDD-HHmmss}/teachers-eg-v{ver}-{ts}-{variant}.apk
-# ──────────────────────────────────────────────────────────────────────────────
 
 name: Android APK → S3
 
@@ -45,7 +28,6 @@ env:
   NODE_VERSION: "20"
   JAVA_VERSION: "17"
 
-# ─── Job ──────────────────────────────────────────────────────────────────────
 jobs:
   build-and-upload:
     name: "${{ github.event.inputs.build_variant || 'debug' }} APK → S3"
@@ -78,7 +60,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # ── 3. Gradle cache (speeds up repeated builds significantly) ─────────
+      # ── 3. Gradle cache ───────────────────────────────────────────────────
       - name: Restore Gradle cache
         uses: actions/cache@v4
         with:
@@ -92,7 +74,7 @@ jobs:
       - name: Install JS dependencies
         run: pnpm install --frozen-lockfile
 
-      # ── 5. Expo Prebuild (generates the native Android project) ───────────
+      # ── 5. Expo Prebuild ──────────────────────────────────────────────────
       - name: Expo Prebuild → Android
         working-directory: artifacts/mobile
         run: pnpm exec expo prebuild --platform android --clean
@@ -123,19 +105,15 @@ jobs:
             echo "apk_dir=debug"               >> "$GITHUB_OUTPUT"
           fi
 
-      # ── 7. Release signing (skipped when keystore secret is absent) ───────
+      # ── 7. Release signing (FIXED EXPRESSION SYNTAX HERE) ─────────────────
       - name: Decode keystore
-        if: |
-          steps.vars.outputs.variant == 'release' &&
-          secrets.ANDROID_KEYSTORE_BASE64 != ''
+        if: ${{ steps.vars.outputs.variant == 'release' && secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" \
             | base64 --decode > artifacts/mobile/android/app/release.keystore
 
       - name: Inject signing config into gradle.properties
-        if: |
-          steps.vars.outputs.variant == 'release' &&
-          secrets.ANDROID_KEYSTORE_BASE64 != ''
+        if: ${{ steps.vars.outputs.variant == 'release' && secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         working-directory: artifacts/mobile/android
         run: |
           cat >> gradle.properties << 'SIGNING'
@@ -167,7 +145,7 @@ jobs:
           APK_PATH=$(ls "${APK_DIR}"/app-*.apk | head -1)
           echo "path=${APK_PATH}" >> "$GITHUB_OUTPUT"
 
-      # ── 10. Save as GitHub Actions artifact (downloadable without S3) ─────
+      # ── 10. Save as GitHub Actions artifact ───────────────────────────────
       - name: Upload APK as Actions artifact
         uses: actions/upload-artifact@v4
         with:
