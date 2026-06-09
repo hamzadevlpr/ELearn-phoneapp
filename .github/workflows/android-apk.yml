@@ -98,7 +98,7 @@ jobs:
 
       # ── 4. Install JS dependencies ────────────────────────────────────────
       - name: Install JS dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       # ── 5. Expo Prebuild (generates the native Android project) ───────────
       - name: Expo Prebuild → Android
