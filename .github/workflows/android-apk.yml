@@ -108,12 +108,15 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       # ── 6. Expo Prebuild (generates the native Android project) ───────────
-      # FIX: Removed --no-install so native modules get properly linked
       - name: Expo Prebuild → Android
         working-directory: artifacts/mobile
-        run: pnpm exec expo prebuild --platform android --clean
+        run: pnpm exec expo prebuild --platform android --clean --no-install
         env:
           EXPO_NO_TELEMETRY: 1
+
+      # ── 6.5 Re-install dependencies if changed by Expo Prebuild ──────────
+      - name: Re-install JS dependencies
+        run: pnpm install --no-frozen-lockfile
 
       # ── 7. Resolve build variant & metadata ──────────────────────────────
       - name: Resolve variant & metadata
