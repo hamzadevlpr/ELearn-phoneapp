@@ -95,6 +95,12 @@ jobs:
             ${{ env.ANDROID_SDK_ROOT }}/ndk/${{ env.NDK_VERSION }}
           key: gradle-ndk-${{ runner.os }}-${{ hashFiles('artifacts/mobile/package.json') }}
           restore-keys: gradle-ndk-${{ runner.os }}-
+          
+      - name: Cache NDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.ANDROID_SDK_ROOT }}/ndk/${{ env.NDK_VERSION }}
+          key: ndk-${{ env.NDK_VERSION }}
 
       # ── 4. Install root JS dependencies ──────────────────────────────────
       # FIX: Install root workspace dependencies first
